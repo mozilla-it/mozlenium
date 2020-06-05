@@ -1,0 +1,70 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: checks.crd.k8s.afrank.local
+spec:
+  group: crd.k8s.afrank.local
+  scope: Namespaced
+  names:
+    plural: checks
+    singular: check
+    kind: Check
+    shortNames:
+     - ch
+     - che
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              template:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              check_interval:
+                type: string
+              retry_interval:
+                type: string
+              notification_interval:
+                type: string
+              max_attempts:
+                type: string
+              attempt:
+                type: string
+              escalation:
+                type: string
+              next_attempt:
+                type: string
+    additionalPrinterColumns:
+    - name: Check_Interval
+      type: string
+      description: Check Interval
+      jsonPath: .spec.check_interval
+    - name: retry_interval
+      type: string
+      description: Retry Interval
+      jsonPath: .spec.retry_interval
+    - name: Notify_Interval
+      type: string
+      description: Notification Interval
+      jsonPath: .spec.notification_interval
+    - name: Attempts
+      type: string
+      description: Max Attempts Before Failure
+      jsonPath: .spec.max_attempts
+    - name: Escalation
+      type: string
+      description: Escalation Target
+      jsonPath: .spec.escalation
+    - name: Next_Attempt
+      type: string
+      description: Next Attempt
+      jsonPath: .spec.next_attempt
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp

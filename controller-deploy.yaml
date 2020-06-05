@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: mozalert-controller
+  name: mozalert-controller
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mozalert-controller
+  template:
+    metadata:
+      labels:
+        app: mozalert-controller
+    spec:
+      containers:
+      - image: afrank/mozalert-controller:latest
+        imagePullPolicy: Always
+        name: mozalert-controller
+      restartPolicy: Always
