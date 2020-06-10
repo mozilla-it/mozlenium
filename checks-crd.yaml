@@ -34,37 +34,39 @@ spec:
                 type: string
               max_attempts:
                 type: string
-              attempt:
-                type: string
               escalation:
                 type: string
               next_attempt:
                 type: string
+              _attempt:
+                type: string
+              _nextCheckTimestamp:
+                type: string
+              _lastCheckTimestamp:
+                type: string
+              _status:
+                type: string
     additionalPrinterColumns:
-    - name: Check_Interval
+    - name: Status
       type: string
-      description: Check Interval
-      jsonPath: .spec.check_interval
-    - name: retry_interval
+      description: Current Status
+      jsonPath: .spec._status
+    - name: Attempt
       type: string
-      description: Retry Interval
-      jsonPath: .spec.retry_interval
-    - name: Notify_Interval
-      type: string
-      description: Notification Interval
-      jsonPath: .spec.notification_interval
-    - name: Attempts
-      type: string
-      description: Max Attempts Before Failure
-      jsonPath: .spec.max_attempts
+      description: Attempt / Max Attempts
+      jsonPath: .spec._attempt
     - name: Escalation
       type: string
-      description: Escalation Target
+      description: Escalation
       jsonPath: .spec.escalation
-    - name: Next_Attempt
+    - name: Last_Check
       type: string
-      description: Next Attempt
-      jsonPath: .spec.next_attempt
+      description: Last Check
+      jsonPath: .spec._lastCheckTimestamp
+    - name: Next_Check
+      type: string
+      description: Next Check
+      jsonPath: .spec._nextCheckTimestamp
     - name: Age
       type: date
       jsonPath: .metadata.creationTimestamp

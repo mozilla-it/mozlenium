@@ -10,7 +10,7 @@ spec:
   escalation: "afrank@mozilla.com"
   template:
     spec:
-      restart_policy: OnFailure
+      restart_policy: Never
       containers:
       - name: test-1
         image: afrank/mozlenium:latest
