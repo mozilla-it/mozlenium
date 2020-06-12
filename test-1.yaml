@@ -14,7 +14,6 @@ spec:
       containers:
       - name: test-1
         image: afrank/mozlenium:latest
-        command: ["/app/entrypoint.sh"]
         args: ["/checks/test-check-1.js"]
         env:
           - name: SSO_LDAP_PASSWORD
