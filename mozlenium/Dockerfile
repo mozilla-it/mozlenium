@@ -2,8 +2,6 @@ FROM node:latest
 
 WORKDIR /app
 
-COPY . /app
-
 RUN curl -sS -o - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && \
     echo "deb [arch=amd64]  http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list && \
     apt-get -y update && \
@@ -16,6 +14,12 @@ RUN wget https://chromedriver.storage.googleapis.com/2.41/chromedriver_linux64.z
     chmod +x chromedriver && \
     mv chromedriver /usr/bin/
 
+ENV NODE_PATH /app/node_modules
+
 RUN npm install selenium-webdriver chromedriver lodash
 
-ENTRYPOINT /app/entrypoint.sh
+COPY mozlenium.js /app/node_modules/
+
+COPY entrypoint.sh /app
+
+ENTRYPOINT [ "/app/entrypoint.sh" ]

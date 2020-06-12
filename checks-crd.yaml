@@ -16,6 +16,8 @@ spec:
   - name: v1
     served: true
     storage: true
+    subresources:
+      status: {}
     schema:
       openAPIV3Schema:
         type: object
@@ -36,25 +38,26 @@ spec:
                 type: string
               escalation:
                 type: string
-              next_attempt:
+          status:
+            type: object
+            properties:
+              attempt:
                 type: string
-              _attempt:
+              nextCheckTimestamp:
                 type: string
-              _nextCheckTimestamp:
+              lastCheckTimestamp:
                 type: string
-              _lastCheckTimestamp:
-                type: string
-              _status:
+              state:
                 type: string
     additionalPrinterColumns:
     - name: Status
       type: string
       description: Current Status
-      jsonPath: .spec._status
+      jsonPath: .status.state
     - name: Attempt
       type: string
       description: Attempt / Max Attempts
-      jsonPath: .spec._attempt
+      jsonPath: .status.attempt
     - name: Escalation
       type: string
       description: Escalation
@@ -62,11 +65,11 @@ spec:
     - name: Last_Check
       type: string
       description: Last Check
-      jsonPath: .spec._lastCheckTimestamp
+      jsonPath: .status.lastCheckTimestamp
     - name: Next_Check
       type: string
       description: Next Check
-      jsonPath: .spec._nextCheckTimestamp
+      jsonPath: .status.nextCheckTimestamp
     - name: Age
       type: date
       jsonPath: .metadata.creationTimestamp

@@ -1,0 +1,5 @@
+graft mozalert
+graft tests
+
+include LICENSE
+include README.md

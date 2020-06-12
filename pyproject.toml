@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "mozalert"
+version = "0.0.1"
+description = "Monitoring tool written in python"
+authors = ["Adam Frank <afrank@mozilla.com>"]
+
+[tool.poetry.dependencies]
+python = ">=3.4"
+kubernetes = "*"
+pytz = "*"
+
+[tool.poetry.scripts]
+mozalert = "mozalert.controller:main"
+
+[tool.poetry.dev-dependencies]
+moto = "*"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"

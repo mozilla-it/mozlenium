@@ -2,6 +2,8 @@
 
 head -1 $1 || true
 
+export NODE_PATH=/app/node_modules
+
 start=$(date +%s)
 node $*
 res=$?

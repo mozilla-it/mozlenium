@@ -6,7 +6,7 @@ spec:
   check_interval: "1"
   retry_interval: "1"
   notification_interval: "1"
-  max_attempts: "3"
+  max_attempts: "5"
   escalation: "afrank@mozilla.com"
   template:
     spec:

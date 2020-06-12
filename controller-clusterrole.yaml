@@ -59,6 +59,7 @@ rules:
   - "crd.k8s.afrank.local"
   resources:
   - checks
+  - checks/status
   verbs:
   - get
   - list
