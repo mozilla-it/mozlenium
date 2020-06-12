@@ -13,7 +13,7 @@ from time import sleep
 import datetime
 import pytz
 
-from mozalert.state import State
+from mozalert.state import State, Status
 
 # kubernetes.client.rest.ApiException
 
@@ -35,28 +35,28 @@ class Check:
 
         self._update = kwargs.get("update",False)
 
-        self._attempt = 0
-        self._next_check = None
-
-        self._state = State.NEW
-        self._pending = False
-
-        self.thread = None
-
         if not self._retry_interval:
             self._retry_interval = self._check_interval
         if not self._notification_interval:
             self._notification_interval = self._check_interval
 
-        self._check_interval *= 60
-        self._retry_interval *= 60
-        self._notification_interval *= 60
-
-        self._next_interval = self._check_interval
-
         if not self._update:
-            self.set_crd_status()
+            self._shutdown = False
+            self._attempt = 0
+            self._runtime = 0
+            self._last_check = None
+            self._next_check = None
+
+            self._status = Status.PENDING
+            self._state = State.IDLE
+            self._pending = False
+
+            self.thread = None
+
+            self._next_interval = self._check_interval
+
             self.start_thread()
+            self.set_crd_status()
 
     @property
     def name(self):
@@ -80,8 +80,18 @@ class Check:
         self.__init__(**kwargs,update=True)
 
     def shutdown(self):
-        self.stop_thread()
-        self.delete_job()
+        self._shutdown = True
+        try:
+            self.stop_thread()
+        except Exception as e:
+            logging.info(sys.exc_info()[0])
+            logging.info(e)
+
+        try:
+            self.delete_job()
+        except Exception as e:
+            logging.info(sys.exc_info()[0])
+            logging.info(e)
 
     def check(self):
         """
@@ -95,7 +105,7 @@ class Check:
         logging.info(f"Check finished for {self._namespace}/{self._name}")
         logging.info(f"Cleaning up finished job for {self._namespace}/{self._name}")
         self.delete_job()
-        if self._state == State.OK:
+        if self._status == Status.OK:
             self._attempt = 0
             self._next_inteval = self._check_interval
         elif self._attempt >= self._max_attempts:
@@ -109,23 +119,31 @@ class Check:
             self._next_interval = self._retry_interval
         self._next_check = str(
             pytz.utc.localize(datetime.datetime.utcnow())
-            + datetime.timedelta(seconds=self._next_interval)
+            + datetime.timedelta(minutes=self._next_interval)
         )
-        self.set_crd_status()
-        self.start_thread()
+        if not self._shutdown:
+            self.start_thread()
+            self.set_crd_status()
 
     def start_thread(self):
         logging.info(
             f"Starting check thread for {self._namespace}/{self._name} at interval {self._next_interval}"
         )
-        self.thread = threading.Timer(self._next_interval, self.check)
+
+        self.thread = threading.Timer(self._next_interval*60, self.check)
         self.thread.setName(f"{self._namespace}/{self._name}")
         self.thread.start()
+        
+        self._next_check = str(
+            pytz.utc.localize(datetime.datetime.utcnow())
+            + datetime.timedelta(minutes=self._next_interval)
+        )
 
     def stop_thread(self):
         logging.info(f"Stopping check thread for {self._namespace}/{self._name}")
-        self.thread.cancel()
-        self.thread.join()
+        if self.thread:
+            self.thread.cancel()
+            self.thread.join()
 
     def run_job(self):
         logging.info(f"Running job for {self._namespace}/{self._name}")
@@ -152,22 +170,25 @@ class Check:
         except Exception as e:
             logging.info(sys.exc_info()[0])
             logging.info(e)
+
+        self._state = State.RUNNING
+        self.set_crd_status()
+
         while True:
-            status, runtime = self.get_job_status()
-            if self._pending and status != State.UNKNOWN:
-                self._pending = False
-            if (
-                status in [State.OK, State.CRITICAL, State.UNKNOWN]
-                and not self._pending
-            ):
-                self._state = status
+            self.set_thread_status()
+            if self._status != Status.PENDING and self._state != State.RUNNING:
+                logging.info(self._status)
+                logging.info(self._state)
                 for log_line in self.get_job_logs().split("\n"):
                     logging.info(log_line)
                 break
             sleep(3)
         logging.info(
-            f"Job finished for {self._namespace}/{self._name} in {runtime} seconds with status {self._state}"
+            f"Job finished for {self._namespace}/{self._name} in {self._runtime} seconds with status {self._status}"
         )
+        self._state = State.IDLE
+        self._last_check = str(pytz.utc.localize(datetime.datetime.utcnow()))
+        self.set_crd_status()
 
     def get_job_logs(self):
         api_response = self.pod_client.list_namespaced_pod(
@@ -180,7 +201,7 @@ class Check:
             )
         return logs
 
-    def get_job_status(self):
+    def set_thread_status(self):
         """
         {'active': 1,
          'completion_time': None,
@@ -189,35 +210,36 @@ class Check:
          'start_time': datetime.datetime(2020, 6, 5, 4, 13, 11, tzinfo=tzlocal()),
          'succeeded': None}
         """
-        runtime = -1
         try:
             api_response = self.client.read_namespaced_job_status(
                 self._name, self._namespace
             )
+            if api_response.status.active == 1 and self._state != State.RUNNING:
+                self._state = State.RUNNING
+                logging.info("Setting the status to RUNNING")
             if api_response.status.start_time:
-                runtime = datetime.datetime.now() - api_response.status.start_time.replace(
-                    tzinfo=None
-                )
+                self._runtime = datetime.datetime.now() - api_response.status.start_time.replace(tzinfo=None)
             if api_response.status.succeeded:
-                return (State.OK, runtime)
-            if api_response.status.failed:
-                return (State.CRITICAL, runtime)
-            if api_response.status.active == 1:
-                return (State.RUNNING, runtime)
+                logging.info("Setting the job state to OK")
+                self._status = Status.OK
+                self._state = State.IDLE
+            elif api_response.status.failed:
+                logging.info("Setting the job state to CRITICAL")
+                self._status = Status.CRITICAL
+                self._state = State.IDLE
         except Exception as e:
             logging.info(sys.exc_info()[0])
             logging.info(e)
-        return (State.UNKNOWN, runtime)
 
     def set_crd_status(self):
         logging.info(f"Setting CRD status for {self._namespace}/{self._name}")
-        now = str(pytz.utc.localize(datetime.datetime.utcnow()))
 
         status = {
             "status": {
+                "status": str(self._status.name),
                 "state": str(self._state.name),
-                "attempt": f"{self._attempt}/{self._max_attempts}",
-                "lastCheckTimestamp": now,
+                "attempt": str(self._attempt),
+                "lastCheckTimestamp": self._last_check,
                 "nextCheckTimestamp": self._next_check,
             }
         }
@@ -281,6 +303,9 @@ def main():
             obj = event.get("object")
             operation = event.get("type")
             logging.info(operation)
+            if operation == "ERROR":
+                logging.info("Received ERROR operation, Dying.")
+                return 2
             if operation not in ["ADDED", "MODIFIED", "DELETED"]:
                 logging.info(f"Received unexpected operation {operation}. Moving on.")
                 continue
@@ -315,11 +340,6 @@ def main():
             elif operation == "MODIFIED":
                 logging.info(f"Detected a modification to {thread_name}")
                 threads[thread_name].update(name=name,namespace=namespace,spec=pod_spec,**clients,**intervals)
-                #logging.info(event)
-                # if thread_name in threads:
-                #    threads[thread_name].shutdown()
-                #    del threads[thread_name]
-                # threads[thread_name] = Check(name=name,namespace=namespace,spec=pod_spec,**clients,**intervals)
 
 if __name__ == "__main__":
     sys.exit(main())

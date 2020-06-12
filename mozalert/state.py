@@ -1,10 +1,13 @@
 from enum import Enum
 
-class State(Enum):
+class Status(Enum):
     OK = 0
     WARN = 1
     CRITICAL = 2
     UNKNOWN = 3
-    RETRY = 4
-    RUNNING = 5
-    NEW = 6
+    PENDING = 4
+
+class State(Enum):
+    IDLE = 0
+    RUNNING = 1
+    UNKNOWN = 2

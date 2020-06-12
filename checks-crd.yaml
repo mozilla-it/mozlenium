@@ -49,15 +49,25 @@ spec:
                 type: string
               state:
                 type: string
+              status:
+                type: string
     additionalPrinterColumns:
     - name: Status
       type: string
       description: Current Status
+      jsonPath: .status.status
+    - name: State
+      type: string
+      description: Current State
       jsonPath: .status.state
     - name: Attempt
       type: string
-      description: Attempt / Max Attempts
+      description: Current Attempt Count
       jsonPath: .status.attempt
+    - name: Max_Attempts
+      type: string
+      description: Maximum Attempts until escalation
+      jsonPath: .spec.max_attempts
     - name: Escalation
       type: string
       description: Escalation
