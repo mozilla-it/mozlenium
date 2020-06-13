@@ -2,6 +2,10 @@ from enum import Enum
 
 
 class Status(Enum):
+    """
+    mozalert Check Status
+    """
+
     OK = 0
     WARN = 1
     CRITICAL = 2
@@ -10,6 +14,10 @@ class Status(Enum):
 
 
 class State(Enum):
+    """
+    mozalert Check State
+    """
+
     IDLE = 0
     RUNNING = 1
     UNKNOWN = 2

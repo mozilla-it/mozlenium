@@ -1,151 +1,33 @@
 import sys
 from kubernetes import client, config, watch
 import logging
-import threading
 from time import sleep
 
-# from types import SimpleNamespace
+from types import SimpleNamespace
 import datetime
 import pytz
 
 from mozalert.state import State, Status
+from mozalert.base import BaseCheck
 
 # kubernetes.client.rest.ApiException
 
 
-class Check:
+class Check(BaseCheck):
+    """
+    the Check object handles the entire lifecycle of a check:
+    * maintains the check interval using threading.Timer (BaseCheck)
+    * manages the resources for running the check itself
+    * reports status to the CRD object
+    * handles escalation
+    """
+
     def __init__(self, **kwargs):
-        """
-        initialize/reinitialize a check
-        """
-        self._name = kwargs.get("name")
-        self._namespace = kwargs.get("namespace")
-        self._spec = kwargs.get("spec")
-        self._check_interval = float(kwargs.get("check_interval"))
-        self._retry_interval = float(kwargs.get("retry_interval", 0))
-        self._notification_interval = float(kwargs.get("notification_interval", 0))
-        self._job_poll_interval = float(kwargs.get("job_poll_interval", 3))
-
-        self._max_attempts = int(kwargs.get("max_attempts", "3"))
-
         self.client = kwargs.get("client", client.BatchV1Api())
         self.pod_client = kwargs.get("pod_client", client.CoreV1Api())
         self.crd_client = kwargs.get("crd_client", client.CustomObjectsApi())
 
-        self._update = kwargs.get("update", False)
-
-        if not self._retry_interval:
-            self._retry_interval = self._check_interval
-        if not self._notification_interval:
-            self._notification_interval = self._check_interval
-
-        """
-        initialize the check for the first time
-        """
-        if not self._update:
-            self._shutdown = False
-            self._attempt = 0
-            self._runtime = 0
-            self._last_check = None
-            self._next_check = None
-
-            self._status = Status.PENDING
-            self._state = State.IDLE
-
-            self.thread = None
-
-            self._next_interval = self._check_interval
-
-            self.start_thread()
-            self.set_crd_status()
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def namespace(self):
-        return self._namespace
-
-    @property
-    def spec(self):
-        return self._spec
-
-    def __repr__(self):
-        return f"{self._namespace}/{self._name}"
-
-    def update(self, **kwargs):
-        """
-        When the object is modified call this to modify the running check instance
-        """
-        self.__init__(**kwargs, update=True)
-
-    def shutdown(self):
-        self._shutdown = True
-        try:
-            self.stop_thread()
-        except Exception as e:
-            logging.info(sys.exc_info()[0])
-            logging.info(e)
-
-        self.delete_job()
-
-    def check(self):
-        """
-        main thread for creating then watching a check job; this is called by 
-        the Timer thread.
-        """
-        logging.info(
-            f"Running the check thread instance for {self._namespace}/{self._name}"
-        )
-        self._attempt += 1
-        self.run_job()
-        logging.info(f"Check finished for {self._namespace}/{self._name}")
-        logging.debug(f"Cleaning up finished job for {self._namespace}/{self._name}")
-        self.delete_job()
-        if self._status == Status.OK:
-            # check passed, things are great!
-            self._attempt = 0
-            self._next_inteval = self._check_interval
-        elif self._attempt >= self._max_attempts:
-            # state is not OK and we've run out of attempts. do the escalation
-            logging.info("Escalating {self._namespace}/{self._name}")
-            self._next_interval = self._retry_interval
-            # ^ TODO keep retrying after escalation? giveup? reset?
-        else:
-            # not state OK and not enough failures to escalate
-            self._next_interval = self._retry_interval
-
-        # set the next_check for the CRD status
-        self._next_check = str(
-            pytz.utc.localize(datetime.datetime.utcnow())
-            + datetime.timedelta(minutes=self._next_interval)
-        )
-        if not self._shutdown:
-            # officially schedule the next run
-            self.start_thread()
-            # update the CRD status subresource
-            self.set_crd_status()
-
-    def start_thread(self):
-        logging.debug(
-            f"Starting check thread for {self._namespace}/{self._name} at interval {self._next_interval}"
-        )
-
-        self.thread = threading.Timer(self._next_interval * 60, self.check)
-        self.thread.setName(f"{self._namespace}/{self._name}")
-        self.thread.start()
-
-        self._next_check = str(
-            pytz.utc.localize(datetime.datetime.utcnow())
-            + datetime.timedelta(minutes=self._next_interval)
-        )
-
-    def stop_thread(self):
-        logging.debug(f"Stopping check thread for {self._namespace}/{self._name}")
-        if self.thread:
-            self.thread.cancel()
-            self.thread.join()
+        super().__init__(**kwargs)
 
     def run_job(self):
         """
@@ -156,7 +38,7 @@ class Check:
             pod spec -> pod template -> job spec -> job
 
         """
-        logging.debug(f"Running job for {self._namespace}/{self._name}")
+        logging.info(f"Running job for {self._namespace}/{self._name}")
         pod_spec = client.V1PodSpec(**self._spec)
         template = client.V1PodTemplateSpec(
             metadata=client.V1ObjectMeta(labels={"app": self._name}), spec=pod_spec
@@ -169,9 +51,7 @@ class Check:
             spec=job_spec,
         )
         try:
-            api_response = self.client.create_namespaced_job(
-                body=job, namespace=self._namespace
-            )
+            res = self.client.create_namespaced_job(body=job, namespace=self._namespace)
             logging.info(f"Job created for {self._namespace}/{self._name}")
         except Exception as e:
             logging.info(sys.exc_info()[0])
@@ -182,10 +62,24 @@ class Check:
 
         # wait for the job to finish
         while True:
-            self.set_thread_status()
+            status = self.get_job_status()
+            if status.active and self._state != State.RUNNING:
+                self._state = State.RUNNING
+                logging.info("Setting the state to RUNNING")
+            if status.start_time:
+                self._runtime = datetime.datetime.now() - status.start_time.replace(
+                    tzinfo=None
+                )
+            if status.succeeded:
+                logging.info("Setting the job status to OK")
+                self._status = Status.OK
+                self._state = State.IDLE
+            elif status.failed:
+                logging.info("Setting the job status to CRITICAL")
+                self._status = Status.CRITICAL
+                self._state = State.IDLE
+
             if self._status != Status.PENDING and self._state != State.RUNNING:
-                logging.info(self._status)
-                logging.info(self._state)
                 for log_line in self.get_job_logs().split("\n"):
                     logging.info(log_line)
                 break
@@ -203,42 +97,45 @@ class Check:
         to have a way to save the logs before deleting it. this retrieves
         the pod logs so they can be blasted into the controller logs.
         """
-        api_response = self.pod_client.list_namespaced_pod(
+        res = self.pod_client.list_namespaced_pod(
             namespace=self._namespace, label_selector=f"app={self._name}"
         )
         logs = ""
-        for pod in api_response.items:
+        for pod in res.items:
             logs += self.pod_client.read_namespaced_pod_log(
                 pod.metadata.name, self._namespace
             )
         return logs
 
-    def set_thread_status(self):
+    def get_job_status(self):
         """
-        read the status of the job object and set it for the check thread
+        read the status of the job object and return a SimpleNamespace
         """
+
+        status = SimpleNamespace(
+            active=False, succeeded=False, failed=False, start_time=None
+        )
+
         try:
-            api_response = self.client.read_namespaced_job_status(
-                self._name, self._namespace
-            )
-            if api_response.status.active == 1 and self._state != State.RUNNING:
-                self._state = State.RUNNING
-                logging.info("Setting the status to RUNNING")
-            if api_response.status.start_time:
-                self._runtime = datetime.datetime.now() - api_response.status.start_time.replace(
-                    tzinfo=None
-                )
-            if api_response.status.succeeded:
-                logging.info("Setting the job state to OK")
-                self._status = Status.OK
-                self._state = State.IDLE
-            elif api_response.status.failed:
-                logging.info("Setting the job state to CRITICAL")
-                self._status = Status.CRITICAL
-                self._state = State.IDLE
+            res = self.client.read_namespaced_job_status(self._name, self._namespace)
         except Exception as e:
             logging.info(sys.exc_info()[0])
             logging.info(e)
+            return status
+
+        if res.status.active == 1:
+            status.active = True
+
+        if res.status.succeeded:
+            status.succeeded = True
+
+        if res.status.failed:
+            status.failed = True
+
+        if res.status.start_time:
+            status.start_time = res.status.start_time
+
+        return status
 
     def set_crd_status(self):
         """
@@ -279,7 +176,7 @@ class Check:
         after a check is complete delete the job which executed it
         """
         try:
-            api_response = self.client.delete_namespaced_job(
+            res = self.client.delete_namespaced_job(
                 self._name, self._namespace, propagation_policy="Foreground"
             )
         except Exception as e:
