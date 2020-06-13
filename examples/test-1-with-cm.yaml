@@ -1,4 +1,6 @@
 ---
+# define intervals and escalations
+# in your Check resource
 apiVersion: "crd.k8s.afrank.local/v1"
 kind: Check
 metadata:
@@ -16,12 +18,9 @@ spec:
       containers:
       - name: test-1
         image: afrank/mozlenium:latest
-        env:
-          - name: SSO_LDAP_PASSWORD
-            valueFrom:
-              secretKeyRef:
-                name: site-checker-secrets
-                key: SSO_LDAP_PASSWORD
+        envFrom:
+        - secretRef:
+            name: check-test-1-mozlenium-secrets
         volumeMounts:
         - name: checks
           mountPath: "/checks"
@@ -32,6 +31,20 @@ spec:
           name: check-test-1-cm
 
 ---
+# here is where you put any secrets you want your
+# check to have. The secret value is base64-encoded
+# For example: echo -n thisisnotsecret | base64 -w0
+kind: Secret
+type: Opaque
+apiVersion: v1
+metadata:
+  name: check-test-1-mozlenium-secrets
+  namespace: default
+data:
+  SECRETSTUFF: dGhpc2lzbm90c2VjcmV0
+
+---
+# here is the check itself, stored in a configmap
 # this block was generated with 
 # k create configmap check-test-1-cm --from-file=./demo-check.js
 kind: ConfigMap
@@ -51,6 +64,8 @@ data:
     console.log("starting check");
 
     $browser.get(url);
+
+    console.log($secure.SECRETSTUFF);
 
     console.log("well that went great");
 

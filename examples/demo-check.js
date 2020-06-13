@@ -9,5 +9,7 @@ console.log("starting check");
 
 $browser.get(url);
 
+console.log($secure.SECRETSTUFF);
+
 console.log("well that went great");
 
