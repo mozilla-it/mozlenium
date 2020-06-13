@@ -29,11 +29,11 @@ class BaseCheck:
         """
         self._name = kwargs.get("name")
         self._namespace = kwargs.get("namespace")
-        self._spec = kwargs.get("spec")
         self._check_interval = float(kwargs.get("check_interval"))
         self._retry_interval = float(kwargs.get("retry_interval", 0))
         self._notification_interval = float(kwargs.get("notification_interval", 0))
         self._job_poll_interval = float(kwargs.get("job_poll_interval", 3))
+        self._spec = kwargs.get("spec",{})
 
         self._max_attempts = int(kwargs.get("max_attempts", "3"))
 

@@ -39,6 +39,22 @@ class Controller:
     def threads(self):
         return self._threads
 
+    @staticmethod
+    def build_spec(name, image, secretRef, check_cm):
+        return {
+            "restart_policy": "Never",
+            "containers": [
+                {
+                    "name": name,
+                    "image": image,
+                    "envFrom": [ { "secretRef": { "name": secretRef } } ],
+                    "volumeMounts": [ { "name": "checks", "mountPath": "/checks", "readOnly": True } ]
+                }
+            ],
+            "volumes": [ { "name": "checks", "configMap": { "name": check_cm } } ]
+        }
+
+
     def run(self):
         """
         the main thread watches the api server event stream for our crd objects and process
@@ -101,8 +117,21 @@ class Controller:
                 # when we restart the stream start from events after this version
                 resource_version = metadata.get("resourceVersion")
 
+                # you can define the pod template either by specifying the entire
+                # template, or specifying the values necessary to generate one:
+                # image: the check image to run
+                # secretRef: where you store secrets to be passed to your chec
+                #            as env vars
+                # check_cm: the configMap containing the body of your check
                 pod_template = spec.get("template", {})
                 pod_spec = pod_template.get("spec", {})
+                if not pod_spec:
+                    pod_spec = self.build_spec(
+                        name = name,
+                        image = spec.get("image",None),
+                        secretRef = spec.get("secretRef",None),
+                        check_cm = spec.get("check_cm",None)
+                    )
 
                 logging.debug(
                     f"{operation} operation detected for thread {thread_name}"

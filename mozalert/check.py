@@ -29,6 +29,8 @@ class Check(BaseCheck):
 
         super().__init__(**kwargs)
 
+        self._spec = kwargs.get("spec",{})
+
     def run_job(self):
         """
         Build the k8s resources, apply them, then poll for completion, and
@@ -180,5 +182,6 @@ class Check(BaseCheck):
                 self._name, self._namespace, propagation_policy="Foreground"
             )
         except Exception as e:
-            logging.info(sys.exc_info()[0])
-            logging.info(e)
+            # failure is probably ok here, if the job doesn't exist
+            logging.debug(sys.exc_info()[0])
+            logging.debug(e)

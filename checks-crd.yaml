@@ -38,6 +38,12 @@ spec:
                 x-kubernetes-int-or-string: true
               escalation:
                 type: string
+              image:
+                type: string
+              secretRef:
+                type: string
+              check_cm:
+                type: string
           status:
             type: object
             properties:
