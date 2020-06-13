@@ -1,8 +1,0 @@
-apiVersion: v1
-data:
-  test-check-1.js: Ly9kZW1vIGNoZWNrCgpyZXF1aXJlKCdtb3psZW5pdW0nKSgpOwoKdmFyIGFzc2VydCA9IHJlcXVpcmUoJ2Fzc2VydCcpOwp2YXIgdXJsID0gJ2h0dHBzOi8vd3d3Lmdvb2dsZS5jb20nCgpjb25zb2xlLmxvZygic3RhcnRpbmcgY2hlY2siKTsKCiRicm93c2VyLmdldCh1cmwpOwoKY29uc29sZS5sb2coIndlbGwgdGhhdCB3ZW50IGdyZWF0Iik7Cgo=
-kind: Secret
-metadata:
-  name: site-checks
-  namespace: default
-type: Opaque

@@ -19,3 +19,5 @@ test-secrets.json
 poetry.lock
 package-lock.json
 node_modules
+
+site-checker-secrets.yaml

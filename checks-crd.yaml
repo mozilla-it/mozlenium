@@ -29,20 +29,20 @@ spec:
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               check_interval:
-                type: string
+                x-kubernetes-int-or-string: true
               retry_interval:
-                type: string
+                x-kubernetes-int-or-string: true
               notification_interval:
-                type: string
+                x-kubernetes-int-or-string: true
               max_attempts:
-                type: string
+                x-kubernetes-int-or-string: true
               escalation:
                 type: string
           status:
             type: object
             properties:
               attempt:
-                type: string
+                x-kubernetes-int-or-string: true
               nextCheckTimestamp:
                 type: string
               lastCheckTimestamp:

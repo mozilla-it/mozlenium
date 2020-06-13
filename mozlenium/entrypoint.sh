@@ -1,11 +1,28 @@
 #!/bin/bash
 
-head -1 $1 || true
+if [[ "$1" ]]; then
+  f=$1
+  shift
+else
+  f=$(ls /checks/*.js | head -1)
+fi
+
+if [[ ! "$f" ]]; then
+  echo "No check file specified"
+  exit 2
+fi
+
+if [[ ! -e $f ]]; then
+  echo "Could not find $f"
+  exit 2
+fi
+
+head -1 $f || true
 
 export NODE_PATH=/app/node_modules
 
 start=$(date +%s)
-node $*
+node $f $*
 res=$?
 end=$(date +%s)
 
