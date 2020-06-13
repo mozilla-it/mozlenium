@@ -10,6 +10,7 @@ from mozalert.check import Check
 
 # kubernetes.client.rest.ApiException
 
+
 def main():
     """
     the main thread watches the api server event stream for our crd objects and process
@@ -43,18 +44,18 @@ def main():
     configuration.assert_hostname = False
 
     api_client = client.api_client.ApiClient(configuration=configuration)
-    batch_v1 = client.BatchV1Api()
-    core_v1 = client.CoreV1Api()
-    crd_client = client.CustomObjectsApi(api_client)
-
-    clients = {"client": batch_v1, "pod_client": core_v1, "crd_client": crd_client}
+    clients = {
+        "client": client.BatchV1Api(),
+        "pod_client": client.CoreV1Api(),
+        "crd_client": client.CustomObjectsApi(api_client),
+    }
 
     logging.info("Waiting for Controller to come up...")
     resource_version = ""
     threads = {}
     while True:
         stream = watch.Watch().stream(
-            crd_client.list_cluster_custom_object,
+            clients["crd_client"].list_cluster_custom_object,
             "crd.k8s.afrank.local",
             "v1",
             "checks",
@@ -63,12 +64,17 @@ def main():
         for event in stream:
             obj = event.get("object")
             operation = event.get("type")
-            logging.info(operation)
+            # restart the controller if ERROR operation is detected.
+            # dying is harsh but in theory states should be preserved in the k8s object.
+            # I've only seen the ERROR state when applying changes to the CRD definition
+            # and in those cases restarting the controller pod is appropriate. TODO validate
             if operation == "ERROR":
-                logging.info("Received ERROR operation, Dying.")
+                logging.error("Received ERROR operation, Dying.")
                 return 2
             if operation not in ["ADDED", "MODIFIED", "DELETED"]:
-                logging.info(f"Received unexpected operation {operation}. Moving on.")
+                logging.warning(
+                    f"Received unexpected operation {operation}. Moving on."
+                )
                 continue
 
             spec = obj.get("spec")
@@ -77,19 +83,22 @@ def main():
                 "retry_interval": spec.get("retry_interval", ""),
                 "notification_interval": spec.get("notification_interval", ""),
             }
+
             metadata = obj.get("metadata")
-            annotations = metadata.get("annotations", {})
             name = metadata.get("name")
             namespace = metadata.get("namespace")
             thread_name = f"{namespace}/{name}"
 
             # when we restart the stream start from events after this version
             resource_version = metadata.get("resourceVersion")
-            
+
             pod_template = spec.get("template", {})
             pod_spec = pod_template.get("spec", {})
 
+            logging.debug(f"{operation} operation detected for thread {thread_name}")
+
             if operation == "ADDED":
+                # create a new check
                 threads[thread_name] = Check(
                     name=name,
                     namespace=namespace,
@@ -99,11 +108,19 @@ def main():
                 )
             elif operation == "DELETED":
                 if thread_name in threads:
+                    # stop the thread
                     threads[thread_name].shutdown()
+                    # delete the check object
                     del threads[thread_name]
             elif operation == "MODIFIED":
-                logging.info(f"Detected a modification to {thread_name}")
-                threads[thread_name].update(name=name,namespace=namespace,spec=pod_spec,**clients,**intervals)
+                threads[thread_name].update(
+                    name=name,
+                    namespace=namespace,
+                    spec=pod_spec,
+                    **clients,
+                    **intervals,
+                )
+
 
 if __name__ == "__main__":
     sys.exit(main())

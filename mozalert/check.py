@@ -1,4 +1,3 @@
-
 import sys
 from kubernetes import client, config, watch
 import logging
@@ -25,7 +24,7 @@ class Check:
         self._check_interval = float(kwargs.get("check_interval"))
         self._retry_interval = float(kwargs.get("retry_interval", 0))
         self._notification_interval = float(kwargs.get("notification_interval", 0))
-        self._job_poll_interval = float(kwargs.get("job_poll_interval",3))
+        self._job_poll_interval = float(kwargs.get("job_poll_interval", 3))
 
         self._max_attempts = int(kwargs.get("max_attempts", "3"))
 
@@ -33,7 +32,7 @@ class Check:
         self.pod_client = kwargs.get("pod_client", client.CoreV1Api())
         self.crd_client = kwargs.get("crd_client", client.CustomObjectsApi())
 
-        self._update = kwargs.get("update",False)
+        self._update = kwargs.get("update", False)
 
         if not self._retry_interval:
             self._retry_interval = self._check_interval
@@ -75,11 +74,11 @@ class Check:
     def __repr__(self):
         return f"{self._namespace}/{self._name}"
 
-    def update(self,**kwargs):
+    def update(self, **kwargs):
         """
         When the object is modified call this to modify the running check instance
         """
-        self.__init__(**kwargs,update=True)
+        self.__init__(**kwargs, update=True)
 
     def shutdown(self):
         self._shutdown = True
@@ -111,7 +110,7 @@ class Check:
         elif self._attempt >= self._max_attempts:
             # state is not OK and we've run out of attempts. do the escalation
             logging.info("Escalating {self._namespace}/{self._name}")
-            self._next_interval = self._retry_interval 
+            self._next_interval = self._retry_interval
             # ^ TODO keep retrying after escalation? giveup? reset?
         else:
             # not state OK and not enough failures to escalate
@@ -133,10 +132,10 @@ class Check:
             f"Starting check thread for {self._namespace}/{self._name} at interval {self._next_interval}"
         )
 
-        self.thread = threading.Timer(self._next_interval*60, self.check)
+        self.thread = threading.Timer(self._next_interval * 60, self.check)
         self.thread.setName(f"{self._namespace}/{self._name}")
         self.thread.start()
-        
+
         self._next_check = str(
             pytz.utc.localize(datetime.datetime.utcnow())
             + datetime.timedelta(minutes=self._next_interval)
@@ -226,7 +225,9 @@ class Check:
                 self._state = State.RUNNING
                 logging.info("Setting the status to RUNNING")
             if api_response.status.start_time:
-                self._runtime = datetime.datetime.now() - api_response.status.start_time.replace(tzinfo=None)
+                self._runtime = datetime.datetime.now() - api_response.status.start_time.replace(
+                    tzinfo=None
+                )
             if api_response.status.succeeded:
                 logging.info("Setting the job state to OK")
                 self._status = Status.OK
@@ -268,7 +269,7 @@ class Check:
                 body=status,
             )
         except Exception as e:
-            # failed to set the status 
+            # failed to set the status
             # TODO should take more action here
             logging.info(sys.exc_info()[0])
             logging.info(e)
@@ -284,4 +285,3 @@ class Check:
         except Exception as e:
             logging.info(sys.exc_info()[0])
             logging.info(e)
-
