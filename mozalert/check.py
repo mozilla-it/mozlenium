@@ -1,10 +1,6 @@
-#!/usr/bin/env python
 
 import sys
-import json
-import yaml
 from kubernetes import client, config, watch
-import os
 import logging
 import threading
 from time import sleep
@@ -20,12 +16,16 @@ from mozalert.state import State, Status
 
 class Check:
     def __init__(self, **kwargs):
+        """
+        initialize/reinitialize a check
+        """
         self._name = kwargs.get("name")
         self._namespace = kwargs.get("namespace")
         self._spec = kwargs.get("spec")
         self._check_interval = float(kwargs.get("check_interval"))
         self._retry_interval = float(kwargs.get("retry_interval", 0))
         self._notification_interval = float(kwargs.get("notification_interval", 0))
+        self._job_poll_interval = float(kwargs.get("job_poll_interval",3))
 
         self._max_attempts = int(kwargs.get("max_attempts", "3"))
 
@@ -40,6 +40,9 @@ class Check:
         if not self._notification_interval:
             self._notification_interval = self._check_interval
 
+        """
+        initialize the check for the first time
+        """
         if not self._update:
             self._shutdown = False
             self._attempt = 0
@@ -49,7 +52,6 @@ class Check:
 
             self._status = Status.PENDING
             self._state = State.IDLE
-            self._pending = False
 
             self.thread = None
 
@@ -87,15 +89,12 @@ class Check:
             logging.info(sys.exc_info()[0])
             logging.info(e)
 
-        try:
-            self.delete_job()
-        except Exception as e:
-            logging.info(sys.exc_info()[0])
-            logging.info(e)
+        self.delete_job()
 
     def check(self):
         """
-        main thread for creating then watching a check job
+        main thread for creating then watching a check job; this is called by 
+        the Timer thread.
         """
         logging.info(
             f"Running the check thread instance for {self._namespace}/{self._name}"
@@ -103,30 +102,34 @@ class Check:
         self._attempt += 1
         self.run_job()
         logging.info(f"Check finished for {self._namespace}/{self._name}")
-        logging.info(f"Cleaning up finished job for {self._namespace}/{self._name}")
+        logging.debug(f"Cleaning up finished job for {self._namespace}/{self._name}")
         self.delete_job()
         if self._status == Status.OK:
+            # check passed, things are great!
             self._attempt = 0
             self._next_inteval = self._check_interval
         elif self._attempt >= self._max_attempts:
-            # do the escalation
+            # state is not OK and we've run out of attempts. do the escalation
             logging.info("Escalating {self._namespace}/{self._name}")
-            self._next_interval = (
-                self._retry_interval
-            )  # TODO keep retrying after escalation? giveup? reset?
+            self._next_interval = self._retry_interval 
+            # ^ TODO keep retrying after escalation? giveup? reset?
         else:
             # not state OK and not enough failures to escalate
             self._next_interval = self._retry_interval
+
+        # set the next_check for the CRD status
         self._next_check = str(
             pytz.utc.localize(datetime.datetime.utcnow())
             + datetime.timedelta(minutes=self._next_interval)
         )
         if not self._shutdown:
+            # officially schedule the next run
             self.start_thread()
+            # update the CRD status subresource
             self.set_crd_status()
 
     def start_thread(self):
-        logging.info(
+        logging.debug(
             f"Starting check thread for {self._namespace}/{self._name} at interval {self._next_interval}"
         )
 
@@ -140,21 +143,26 @@ class Check:
         )
 
     def stop_thread(self):
-        logging.info(f"Stopping check thread for {self._namespace}/{self._name}")
+        logging.debug(f"Stopping check thread for {self._namespace}/{self._name}")
         if self.thread:
             self.thread.cancel()
             self.thread.join()
 
     def run_job(self):
-        logging.info(f"Running job for {self._namespace}/{self._name}")
-        self._pending = True
+        """
+        Build the k8s resources, apply them, then poll for completion, and
+        report status back to the thread.
+        
+        The k8s resources take the form:
+            pod spec -> pod template -> job spec -> job
+
+        """
+        logging.debug(f"Running job for {self._namespace}/{self._name}")
         pod_spec = client.V1PodSpec(**self._spec)
         template = client.V1PodTemplateSpec(
             metadata=client.V1ObjectMeta(labels={"app": self._name}), spec=pod_spec
         )
-        job_spec = client.V1JobSpec(
-            template=template, backoff_limit=0
-        )  # ttl_seconds_after_finished
+        job_spec = client.V1JobSpec(template=template, backoff_limit=0)
         job = client.V1Job(
             api_version="batch/v1",
             kind="Job",
@@ -162,7 +170,6 @@ class Check:
             spec=job_spec,
         )
         try:
-            # api_response = batch_v1.patch_namespaced_job(name, namespace, body=job)
             api_response = self.client.create_namespaced_job(
                 body=job, namespace=self._namespace
             )
@@ -174,6 +181,7 @@ class Check:
         self._state = State.RUNNING
         self.set_crd_status()
 
+        # wait for the job to finish
         while True:
             self.set_thread_status()
             if self._status != Status.PENDING and self._state != State.RUNNING:
@@ -182,7 +190,7 @@ class Check:
                 for log_line in self.get_job_logs().split("\n"):
                     logging.info(log_line)
                 break
-            sleep(3)
+            sleep(self._job_poll_interval)
         logging.info(
             f"Job finished for {self._namespace}/{self._name} in {self._runtime} seconds with status {self._status}"
         )
@@ -191,6 +199,11 @@ class Check:
         self.set_crd_status()
 
     def get_job_logs(self):
+        """
+        since the CRD deletes the pod after its done running, it is nice
+        to have a way to save the logs before deleting it. this retrieves
+        the pod logs so they can be blasted into the controller logs.
+        """
         api_response = self.pod_client.list_namespaced_pod(
             namespace=self._namespace, label_selector=f"app={self._name}"
         )
@@ -203,12 +216,7 @@ class Check:
 
     def set_thread_status(self):
         """
-        {'active': 1,
-         'completion_time': None,
-         'conditions': None,
-         'failed': None,
-         'start_time': datetime.datetime(2020, 6, 5, 4, 13, 11, tzinfo=tzlocal()),
-         'succeeded': None}
+        read the status of the job object and set it for the check thread
         """
         try:
             api_response = self.client.read_namespaced_job_status(
@@ -232,7 +240,13 @@ class Check:
             logging.info(e)
 
     def set_crd_status(self):
-        logging.info(f"Setting CRD status for {self._namespace}/{self._name}")
+        """
+        Patch the status subresource of the check object in k8s to use the latest
+        status. NOTE: In what I've read in the docs, this should NOT cause a modify
+        event, however it does, even when hitting the apiserver directly. We are careful
+        to account for this but TODO to understand this further.
+        """
+        logging.debug(f"Setting CRD status for {self._namespace}/{self._name}")
 
         status = {
             "status": {
@@ -245,7 +259,6 @@ class Check:
         }
 
         try:
-            #logging.info("not setting status")
             res = self.crd_client.patch_namespaced_custom_object_status(
                 "crd.k8s.afrank.local",
                 "v1",
@@ -255,10 +268,15 @@ class Check:
                 body=status,
             )
         except Exception as e:
+            # failed to set the status 
+            # TODO should take more action here
             logging.info(sys.exc_info()[0])
             logging.info(e)
 
     def delete_job(self):
+        """
+        after a check is complete delete the job which executed it
+        """
         try:
             api_response = self.client.delete_namespaced_job(
                 self._name, self._namespace, propagation_policy="Foreground"
@@ -267,79 +285,3 @@ class Check:
             logging.info(sys.exc_info()[0])
             logging.info(e)
 
-
-def main():
-    logging.basicConfig(
-        format="[%(asctime)s] %(name)s [%(levelname)s]: %(message)s", level=logging.INFO
-    )
-
-    if "KUBERNETES_PORT" in os.environ:
-        config.load_incluster_config()
-    else:
-        config.load_kube_config()
-
-    configuration = client.Configuration()
-    configuration.assert_hostname = False
-
-    api_client = client.api_client.ApiClient(configuration=configuration)
-    batch_v1 = client.BatchV1Api()
-    core_v1 = client.CoreV1Api()
-    crd_client = client.CustomObjectsApi(api_client)
-
-    clients = {"client": batch_v1, "pod_client": core_v1, "crd_client": crd_client}
-
-    logging.info("Waiting for Controller to come up...")
-    resource_version = ""
-    threads = {}
-    while True:
-        stream = watch.Watch().stream(
-            crd_client.list_cluster_custom_object,
-            "crd.k8s.afrank.local",
-            "v1",
-            "checks",
-            resource_version=resource_version,
-        )
-        for event in stream:
-            obj = event.get("object")
-            operation = event.get("type")
-            logging.info(operation)
-            if operation == "ERROR":
-                logging.info("Received ERROR operation, Dying.")
-                return 2
-            if operation not in ["ADDED", "MODIFIED", "DELETED"]:
-                logging.info(f"Received unexpected operation {operation}. Moving on.")
-                continue
-
-            spec = obj.get("spec")
-            intervals = {
-                "check_interval": spec.get("check_interval"),
-                "retry_interval": spec.get("retry_interval", ""),
-                "notification_interval": spec.get("notification_interval", ""),
-            }
-            metadata = obj.get("metadata")
-            annotations = metadata.get("annotations", {})
-            name = metadata.get("name")
-            namespace = metadata.get("namespace")
-            thread_name = f"{namespace}/{name}"
-            resource_version = metadata.get("resourceVersion")
-            pod_template = spec.get("template", {})
-            pod_spec = pod_template.get("spec", {})
-
-            if operation == "ADDED":
-                threads[thread_name] = Check(
-                    name=name,
-                    namespace=namespace,
-                    spec=pod_spec,
-                    **clients,
-                    **intervals,
-                )
-            elif operation == "DELETED":
-                if thread_name in threads:
-                    threads[thread_name].shutdown()
-                    del threads[thread_name]
-            elif operation == "MODIFIED":
-                logging.info(f"Detected a modification to {thread_name}")
-                threads[thread_name].update(name=name,namespace=namespace,spec=pod_spec,**clients,**intervals)
-
-if __name__ == "__main__":
-    sys.exit(main())

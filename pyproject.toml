@@ -10,7 +10,7 @@ kubernetes = "*"
 pytz = "*"
 
 [tool.poetry.scripts]
-mozalert = "mozalert.controller:main"
+mozalert = "mozalert.main:main"
 
 [tool.poetry.dev-dependencies]
 moto = "*"
