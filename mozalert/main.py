@@ -11,7 +11,7 @@ logging.basicConfig(
 
 
 def main():
-    Controller().run()
+    return Controller().run()
 
 
 if __name__ == "__main__":
