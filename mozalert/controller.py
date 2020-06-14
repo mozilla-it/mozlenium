@@ -4,6 +4,8 @@ import logging
 
 from mozalert.check import Check
 
+import re
+from datetime import timedelta
 
 class Controller:
     """
@@ -54,6 +56,27 @@ class Controller:
             "volumes": [ { "name": "checks", "configMap": { "name": check_cm } } ]
         }
 
+    @staticmethod
+    def parse_time(time_str):
+        """
+        parse_time takes either a number (in minutes) or a formatted time string [XXh][XXm][XXs]
+        """
+        try:
+            minutes = float(time_str)
+            return timedelta(minutes=minutes)
+        except:
+            # didn't pass a number, move on to parse the string
+            pass
+        regex = re.compile(r'((?P<hours>\d+?)hr)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?')
+        parts = regex.match(time_str)
+        if not parts:
+            return
+        parts = parts.groupdict()
+        time_params = {}
+        for (name, param) in iter(parts.items()):
+            if param:
+                time_params[name] = int(param)
+        return timedelta(**time_params)
 
     def run(self):
         """
@@ -104,10 +127,11 @@ class Controller:
 
                 spec = obj.get("spec")
                 intervals = {
-                    "check_interval": spec.get("check_interval"),
-                    "retry_interval": spec.get("retry_interval", ""),
-                    "notification_interval": spec.get("notification_interval", ""),
+                    "check_interval": self.parse_time(spec.get("check_interval")).seconds,
+                    "retry_interval": self.parse_time(spec.get("retry_interval", "")).seconds,
+                    "notification_interval": self.parse_time(spec.get("notification_interval", "")).seconds,
                 }
+                max_attempts = spec.get("max_attempts",3)
 
                 metadata = obj.get("metadata")
                 name = metadata.get("name")
@@ -143,6 +167,7 @@ class Controller:
                         name=name,
                         namespace=namespace,
                         spec=pod_spec,
+                        max_attempts=max_attempts,
                         **self._clients,
                         **intervals,
                     )
@@ -153,10 +178,25 @@ class Controller:
                         # delete the check object
                         del self._threads[thread_name]
                 elif operation == "MODIFIED":
-                    self._threads[thread_name].update(
-                        name=name,
-                        namespace=namespace,
-                        spec=pod_spec,
-                        **self._clients,
-                        **intervals,
-                    )
+                    # TODO come up with a better way to do this
+                    if (
+                        self._threads[thread_name].spec != pod_spec
+                        or self._threads[thread_name].notification_interval != intervals["notification_interval"]
+                        or self._threads[thread_name].check_interval != intervals["check_interval"]
+                        or self._threads[thread_name].retry_interval != intervals["retry_interval"]
+                        or self._threads[thread_name].max_attempts != max_attempts
+                    ):
+                        logging.info(f"Detected a modification to {thread_name}, restarting the thread")
+                        if thread_name in self._threads:
+                            self._threads[thread_name].shutdown()
+                            del self._threads[thread_name]
+                            self._threads[thread_name] = Check(
+                                name=name,
+                                namespace=namespace,
+                                spec=pod_spec,
+                                max_attempts=max_attempts,
+                                **self._clients,
+                                **intervals,
+                            )
+                    else:
+                        logging.debug("Detected a status change")

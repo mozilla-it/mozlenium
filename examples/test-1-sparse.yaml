@@ -7,10 +7,10 @@ metadata:
   name: check-test-1
   namespace: default
 spec:
-  check_interval: 1
-  retry_interval: 1
-  notification_interval: 1
-  max_attempts: 5
+  check_interval: 1m
+  retry_interval: 3m
+  notification_interval: 5m
+  max_attempts: 3
   escalation: afrank@mozilla.com
   image: afrank/mozlenium
   secretRef: check-test-1-mozlenium-secrets

@@ -69,7 +69,7 @@ class Check(BaseCheck):
                 self._state = State.RUNNING
                 logging.info("Setting the state to RUNNING")
             if status.start_time:
-                self._runtime = datetime.datetime.now() - status.start_time.replace(
+                self._runtime = datetime.datetime.utcnow() - status.start_time.replace(
                     tzinfo=None
                 )
             if status.succeeded:
@@ -87,10 +87,10 @@ class Check(BaseCheck):
                 break
             sleep(self._job_poll_interval)
         logging.info(
-            f"Job finished for {self._namespace}/{self._name} in {self._runtime} seconds with status {self._status}"
+            f"Job finished for {self._namespace}/{self._name} in {self._runtime.seconds} seconds with status {self._status}"
         )
         self._state = State.IDLE
-        self._last_check = str(pytz.utc.localize(datetime.datetime.utcnow()))
+        self._last_check = pytz.utc.localize(datetime.datetime.utcnow())
         self.set_crd_status()
 
     def get_job_logs(self):
@@ -153,8 +153,8 @@ class Check(BaseCheck):
                 "status": str(self._status.name),
                 "state": str(self._state.name),
                 "attempt": str(self._attempt),
-                "lastCheckTimestamp": self._last_check,
-                "nextCheckTimestamp": self._next_check,
+                "lastCheckTimestamp": str(self._last_check),
+                "nextCheckTimestamp": str(self._next_check),
             }
         }
 

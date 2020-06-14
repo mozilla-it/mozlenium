@@ -55,7 +55,7 @@ class BaseCheck:
             self._status = Status.PENDING
             self._state = State.IDLE
 
-            self.thread = None
+            self._thread = None
 
             self._next_interval = self._check_interval
 
@@ -73,6 +73,26 @@ class BaseCheck:
     @property
     def spec(self):
         return self._spec
+
+    @property
+    def thread(self):
+        return self._thread
+
+    @property
+    def check_interval(self):
+        return self._check_interval
+
+    @property
+    def retry_interval(self):
+        return self._retry_interval
+
+    @property
+    def notification_interval(self):
+        return self._notification_interval
+
+    @property
+    def max_attempts(self):
+        return self._max_attempts
 
     def __repr__(self):
         return f"{self._namespace}/{self._name}"
@@ -96,22 +116,16 @@ class BaseCheck:
     def delete_job(self):
         logging.info("Executing mock delete_job")
 
-    def update(self, **kwargs):
-        """
-        When the object is modified call this to modify the running check instance
-        """
-        self.__init__(**kwargs, update=True)
-
     def shutdown(self):
         """
         stop the thread and cleanup any leftover jobs
         """
         self._shutdown = True
         logging.debug(f"Stopping check thread for {self._namespace}/{self._name}")
-        if self.thread:
+        if self._thread:
             try:
-                self.thread.cancel()
-                self.thread.join()
+                self._thread.cancel()
+                self._thread.join()
             except Exception as e:
                 logging.info(sys.exc_info()[0])
                 logging.info(e)
@@ -146,10 +160,7 @@ class BaseCheck:
             self._next_interval = self._retry_interval
 
         # set the next_check for the CRD status
-        self._next_check = str(
-            pytz.utc.localize(datetime.datetime.utcnow())
-            + datetime.timedelta(minutes=self._next_interval)
-        )
+        self._next_check = pytz.utc.localize(datetime.datetime.utcnow()) + datetime.timedelta(seconds=self._next_interval)
         if not self._shutdown:
             # officially schedule the next run
             self.start_thread()
@@ -160,17 +171,14 @@ class BaseCheck:
         """
         starts the thread and updates the next_check time in the object.
 
-        For this to work you must have a self.check and a self._next_interval >=0 minutes
+        For this to work you must have a self.check and a self._next_interval >=0 seconds
         """
         logging.info(
-            f"Starting check thread for {self._namespace}/{self._name} at interval {self._next_interval}"
+            f"Starting check thread for {self._namespace}/{self._name} at interval {self._next_interval} seconds"
         )
 
-        self.thread = threading.Timer(self._next_interval * 60, self.check)
-        self.thread.setName(f"{self._namespace}/{self._name}")
-        self.thread.start()
+        self._thread = threading.Timer(self._next_interval, self.check)
+        self._thread.setName(f"{self._namespace}/{self._name}")
+        self._thread.start()
 
-        self._next_check = str(
-            pytz.utc.localize(datetime.datetime.utcnow())
-            + datetime.timedelta(minutes=self._next_interval)
-        )
+        self._next_check = pytz.utc.localize(datetime.datetime.utcnow()) + datetime.timedelta(seconds=self._next_interval)
