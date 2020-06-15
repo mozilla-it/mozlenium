@@ -22,7 +22,7 @@ head -1 $f || true
 export NODE_PATH=/app/node_modules
 
 start=$(date +%s)
-node $f $*
+node --abort-on-uncaught-exception --unhandled-rejections=strict $f $*
 res=$?
 end=$(date +%s)
 

@@ -8,6 +8,7 @@ authors = ["Adam Frank <afrank@mozilla.com>"]
 python = ">=3.4"
 kubernetes = "*"
 pytz = "*"
+sendgrid = "*"
 
 [tool.poetry.scripts]
 mozalert = "mozalert.main:main"

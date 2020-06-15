@@ -21,3 +21,4 @@ package-lock.json
 node_modules
 
 site-checker-secrets.yaml
+*secrets.yaml

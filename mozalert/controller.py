@@ -7,6 +7,7 @@ from mozalert.check import Check
 import re
 from datetime import timedelta
 
+
 class Controller:
     """
     the Controller runs the main thread which tails the event stream for objects in our CRD. It
@@ -49,11 +50,13 @@ class Controller:
                 {
                     "name": name,
                     "image": image,
-                    "envFrom": [ { "secretRef": { "name": secretRef } } ],
-                    "volumeMounts": [ { "name": "checks", "mountPath": "/checks", "readOnly": True } ]
+                    "envFrom": [{"secretRef": {"name": secretRef}}],
+                    "volumeMounts": [
+                        {"name": "checks", "mountPath": "/checks", "readOnly": True}
+                    ],
                 }
             ],
-            "volumes": [ { "name": "checks", "configMap": { "name": check_cm } } ]
+            "volumes": [{"name": "checks", "configMap": {"name": check_cm}}],
         }
 
     @staticmethod
@@ -67,7 +70,9 @@ class Controller:
         except:
             # didn't pass a number, move on to parse the string
             pass
-        regex = re.compile(r'((?P<hours>\d+?)hr)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?')
+        regex = re.compile(
+            r"((?P<hours>\d+?)hr)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?"
+        )
         parts = regex.match(time_str)
         if not parts:
             return
@@ -127,11 +132,18 @@ class Controller:
 
                 spec = obj.get("spec")
                 intervals = {
-                    "check_interval": self.parse_time(spec.get("check_interval")).seconds,
-                    "retry_interval": self.parse_time(spec.get("retry_interval", "")).seconds,
-                    "notification_interval": self.parse_time(spec.get("notification_interval", "")).seconds,
+                    "check_interval": self.parse_time(
+                        spec.get("check_interval")
+                    ).seconds,
+                    "retry_interval": self.parse_time(
+                        spec.get("retry_interval", "")
+                    ).seconds,
+                    "notification_interval": self.parse_time(
+                        spec.get("notification_interval", "")
+                    ).seconds,
                 }
-                max_attempts = spec.get("max_attempts",3)
+                max_attempts = spec.get("max_attempts", 3)
+                escalation = spec.get("escalation", "")
 
                 metadata = obj.get("metadata")
                 name = metadata.get("name")
@@ -151,10 +163,10 @@ class Controller:
                 pod_spec = pod_template.get("spec", {})
                 if not pod_spec:
                     pod_spec = self.build_spec(
-                        name = name,
-                        image = spec.get("image",None),
-                        secretRef = spec.get("secretRef",None),
-                        check_cm = spec.get("check_cm",None)
+                        name=name,
+                        image=spec.get("image", None),
+                        secretRef=spec.get("secretRef", None),
+                        check_cm=spec.get("check_cm", None),
                     )
 
                 logging.debug(
@@ -168,6 +180,7 @@ class Controller:
                         namespace=namespace,
                         spec=pod_spec,
                         max_attempts=max_attempts,
+                        escalation=escalation,
                         **self._clients,
                         **intervals,
                     )
@@ -180,13 +193,20 @@ class Controller:
                 elif operation == "MODIFIED":
                     # TODO come up with a better way to do this
                     if (
-                        self._threads[thread_name].spec != pod_spec
-                        or self._threads[thread_name].notification_interval != intervals["notification_interval"]
-                        or self._threads[thread_name].check_interval != intervals["check_interval"]
-                        or self._threads[thread_name].retry_interval != intervals["retry_interval"]
-                        or self._threads[thread_name].max_attempts != max_attempts
+                        self._threads[thread_name].config.spec != pod_spec
+                        or self._threads[thread_name].config.notification_interval
+                        != intervals["notification_interval"]
+                        or self._threads[thread_name].config.check_interval
+                        != intervals["check_interval"]
+                        or self._threads[thread_name].config.retry_interval
+                        != intervals["retry_interval"]
+                        or self._threads[thread_name].config.max_attempts
+                        != max_attempts
+                        or self._threads[thread_name].config.escalation != escalation
                     ):
-                        logging.info(f"Detected a modification to {thread_name}, restarting the thread")
+                        logging.info(
+                            f"Detected a modification to {thread_name}, restarting the thread"
+                        )
                         if thread_name in self._threads:
                             self._threads[thread_name].shutdown()
                             del self._threads[thread_name]
@@ -195,6 +215,7 @@ class Controller:
                                 namespace=namespace,
                                 spec=pod_spec,
                                 max_attempts=max_attempts,
+                                escalation=escalation,
                                 **self._clients,
                                 **intervals,
                             )

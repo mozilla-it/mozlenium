@@ -29,7 +29,7 @@ class Check(BaseCheck):
 
         super().__init__(**kwargs)
 
-        self._spec = kwargs.get("spec",{})
+        # self._spec = kwargs.get("spec",{})
 
     def run_job(self):
         """
@@ -40,21 +40,26 @@ class Check(BaseCheck):
             pod spec -> pod template -> job spec -> job
 
         """
-        logging.info(f"Running job for {self._namespace}/{self._name}")
-        pod_spec = client.V1PodSpec(**self._spec)
+        logging.info(f"Running job for {self._config.namespace}/{self._config.name}")
+        pod_spec = client.V1PodSpec(**self._config.spec)
         template = client.V1PodTemplateSpec(
-            metadata=client.V1ObjectMeta(labels={"app": self._name}), spec=pod_spec
+            metadata=client.V1ObjectMeta(labels={"app": self._config.name}),
+            spec=pod_spec,
         )
         job_spec = client.V1JobSpec(template=template, backoff_limit=0)
         job = client.V1Job(
             api_version="batch/v1",
             kind="Job",
-            metadata=client.V1ObjectMeta(name=self._name),
+            metadata=client.V1ObjectMeta(name=self._config.name),
             spec=job_spec,
         )
         try:
-            res = self.client.create_namespaced_job(body=job, namespace=self._namespace)
-            logging.info(f"Job created for {self._namespace}/{self._name}")
+            res = self.client.create_namespaced_job(
+                body=job, namespace=self._config.namespace
+            )
+            logging.info(
+                f"Job created for {self._config.namespace}/{self._config.name}"
+            )
         except Exception as e:
             logging.info(sys.exc_info()[0])
             logging.info(e)
@@ -82,12 +87,13 @@ class Check(BaseCheck):
                 self._state = State.IDLE
 
             if self._status != Status.PENDING and self._state != State.RUNNING:
-                for log_line in self.get_job_logs().split("\n"):
+                self.get_job_logs()
+                for log_line in self._logs.split("\n"):
                     logging.info(log_line)
                 break
             sleep(self._job_poll_interval)
         logging.info(
-            f"Job finished for {self._namespace}/{self._name} in {self._runtime.seconds} seconds with status {self._status}"
+            f"Job finished for {self._config.namespace}/{self._config.name} in {self._runtime.seconds} seconds with status {self._status}"
         )
         self._state = State.IDLE
         self._last_check = pytz.utc.localize(datetime.datetime.utcnow())
@@ -100,14 +106,14 @@ class Check(BaseCheck):
         the pod logs so they can be blasted into the controller logs.
         """
         res = self.pod_client.list_namespaced_pod(
-            namespace=self._namespace, label_selector=f"app={self._name}"
+            namespace=self._config.namespace, label_selector=f"app={self._config.name}"
         )
         logs = ""
         for pod in res.items:
             logs += self.pod_client.read_namespaced_pod_log(
-                pod.metadata.name, self._namespace
+                pod.metadata.name, self._config.namespace
             )
-        return logs
+        self._logs = logs
 
     def get_job_status(self):
         """
@@ -119,7 +125,9 @@ class Check(BaseCheck):
         )
 
         try:
-            res = self.client.read_namespaced_job_status(self._name, self._namespace)
+            res = self.client.read_namespaced_job_status(
+                self._config.name, self._config.namespace
+            )
         except Exception as e:
             logging.info(sys.exc_info()[0])
             logging.info(e)
@@ -146,7 +154,9 @@ class Check(BaseCheck):
         event, however it does, even when hitting the apiserver directly. We are careful
         to account for this but TODO to understand this further.
         """
-        logging.debug(f"Setting CRD status for {self._namespace}/{self._name}")
+        logging.debug(
+            f"Setting CRD status for {self._config.namespace}/{self._config.name}"
+        )
 
         status = {
             "status": {
@@ -162,9 +172,9 @@ class Check(BaseCheck):
             res = self.crd_client.patch_namespaced_custom_object_status(
                 "crd.k8s.afrank.local",
                 "v1",
-                self._namespace,
+                self._config.namespace,
                 "checks",
-                self._name,
+                self._config.name,
                 body=status,
             )
         except Exception as e:
@@ -179,7 +189,9 @@ class Check(BaseCheck):
         """
         try:
             res = self.client.delete_namespaced_job(
-                self._name, self._namespace, propagation_policy="Foreground"
+                self._config.name,
+                self._config.namespace,
+                propagation_policy="Foreground",
             )
         except Exception as e:
             # failure is probably ok here, if the job doesn't exist
