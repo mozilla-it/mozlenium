@@ -8,6 +8,7 @@ import pytz
 
 from mozalert.state import State, Status
 
+
 class BaseCheck:
     """
     BaseCheck implements the thread/interval logic of a check without any
@@ -31,13 +32,13 @@ class BaseCheck:
         self._update = kwargs.get("update", False)
 
         self._config = SimpleNamespace(
-            name = kwargs.get("name"),
-            namespace = kwargs.get("namespace"),
-            check_interval = float(kwargs.get("check_interval")),
-            retry_interval = float(kwargs.get("retry_interval", 0)),
-            notification_interval = float(kwargs.get("notification_interval", 0)),
-            escalation = kwargs.get("escalation", ""),
-            max_attempts = int(kwargs.get("max_attempts", "3")),
+            name=kwargs.get("name"),
+            namespace=kwargs.get("namespace"),
+            check_interval=float(kwargs.get("check_interval")),
+            retry_interval=float(kwargs.get("retry_interval", 0)),
+            notification_interval=float(kwargs.get("notification_interval", 0)),
+            escalation=kwargs.get("escalation", ""),
+            max_attempts=int(kwargs.get("max_attempts", "3")),
         )
 
         if not self._config.retry_interval:
@@ -128,7 +129,9 @@ class BaseCheck:
         try:
             self.run_job()
         except:
-            logging.error(f"Job failed to start for {self._config.namespace}/{self._config.name}")
+            logging.error(
+                f"Job failed to start for {self._config.namespace}/{self._config.name}"
+            )
             self.delete_job()
         logging.info(f"Check finished for {self._config.namespace}/{self._config.name}")
         logging.debug(

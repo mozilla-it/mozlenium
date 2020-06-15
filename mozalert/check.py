@@ -42,7 +42,9 @@ class Check(BaseCheck):
         """
 
         self._config.spec = kwargs.get("spec", {})
-        self._config.escalation_template = kwargs.get("escalation_template", default_escalation_template)
+        self._config.escalation_template = kwargs.get(
+            "escalation_template", default_escalation_template
+        )
 
     def escalate(self):
         logging.info(f"Escalating {self._config.namespace}/{self._config.name}")
@@ -197,8 +199,8 @@ class Check(BaseCheck):
                 "status": str(self._status.name),
                 "state": str(self._state.name),
                 "attempt": str(self._attempt),
-                "lastCheckTimestamp": str(self._last_check).split('.')[0],
-                "nextCheckTimestamp": str(self._next_check).split('.')[0],
+                "lastCheckTimestamp": str(self._last_check).split(".")[0],
+                "nextCheckTimestamp": str(self._next_check).split(".")[0],
                 "logs": self._logs,
             }
         }
