@@ -1,4 +1,3 @@
-import os
 import sys
 import logging
 import threading
@@ -8,8 +7,6 @@ import datetime
 import pytz
 
 from mozalert.state import State, Status
-from mozalert.sendgrid import SendGridTools
-
 
 class BaseCheck:
     """
@@ -19,7 +16,7 @@ class BaseCheck:
     To use this class as your base class, you should implement the
     job-related methods:
         * delete_job
-        * get_job_logs (string)
+        * get_job_logs
         * get_job_status (SimpleNamespace)
         * set_crd_status
         * run_job
@@ -29,29 +26,19 @@ class BaseCheck:
         """
         initialize/reinitialize a check
         """
+
         self._job_poll_interval = float(kwargs.get("job_poll_interval", 3))
-        default_escalation_template = """
-        <p>
-        <b>Name:</b> {namespace}/{name}<br>
-        <b>Status:</b> {status}<br>                            
-        <b>Attempt:</b> {attempt}/{max_attempts}<br>
-        <b>Last Check:</b> {last_check}<br>
-        <b>More Details:</b><br> <pre>{logs}</pre><br>
-        </p>
-        """
+        self._update = kwargs.get("update", False)
+
         self._config = SimpleNamespace(
             name = kwargs.get("name"),
             namespace = kwargs.get("namespace"),
             check_interval = float(kwargs.get("check_interval")),
             retry_interval = float(kwargs.get("retry_interval", 0)),
             notification_interval = float(kwargs.get("notification_interval", 0)),
-            spec = kwargs.get("spec", {}),
             escalation = kwargs.get("escalation", ""),
             max_attempts = int(kwargs.get("max_attempts", "3")),
-            escalation_template = kwargs.get("escalation_template", default_escalation_template),
         )
-
-        self._update = kwargs.get("update", False)
 
         if not self._config.retry_interval:
             self._config.retry_interval = self._config.check_interval
@@ -108,24 +95,7 @@ class BaseCheck:
         logging.info("Executing mock delete_job")
 
     def escalate(self):
-        logging.info(f"Escalating {self._config.namespace}/{self._config.name}")
-        sendgrid_key = os.environ.get("SENDGRID_API_KEY", "")
-        message = self._config.escalation_template.format(
-            name=self._config.name,
-            namespace=self._config.namespace,
-            status=self._status.name,
-            attempt=self._attempt,
-            max_attempts=self._config.max_attempts,
-            last_check=str(self._last_check),
-            logs=self._logs,
-        )
-        SendGridTools.send_message(
-            api_key=sendgrid_key,
-            to_emails=[self._config.escalation],
-            message=message,
-            subject=f"Mozalert {self._status.name}: {self._config.namespace}/{self._config.name}",
-        )
-        logging.info(f"Message sent to {self._config.escalation}")
+        logging.info(f"Executing mock escalation")
 
     def shutdown(self):
         """
