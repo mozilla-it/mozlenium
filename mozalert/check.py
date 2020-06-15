@@ -63,6 +63,7 @@ class Check(BaseCheck):
         except Exception as e:
             logging.info(sys.exc_info()[0])
             logging.info(e)
+            raise
 
         self._state = State.RUNNING
         self.set_crd_status()
@@ -163,8 +164,9 @@ class Check(BaseCheck):
                 "status": str(self._status.name),
                 "state": str(self._state.name),
                 "attempt": str(self._attempt),
-                "lastCheckTimestamp": str(self._last_check),
-                "nextCheckTimestamp": str(self._next_check),
+                "lastCheckTimestamp": str(self._last_check).split('.')[0],
+                "nextCheckTimestamp": str(self._next_check).split('.')[0],
+                "logs": self._logs,
             }
         }
 

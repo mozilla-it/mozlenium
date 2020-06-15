@@ -16,7 +16,7 @@ RUN wget https://chromedriver.storage.googleapis.com/2.41/chromedriver_linux64.z
 
 ENV NODE_PATH /app/node_modules
 
-RUN npm install selenium-webdriver chromedriver lodash
+RUN npm install selenium-webdriver chromedriver lodash assert request
 
 COPY mozlenium.js /app/node_modules/
 

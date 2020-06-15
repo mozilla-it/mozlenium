@@ -125,7 +125,7 @@ class BaseCheck:
             message=message,
             subject=f"Mozalert {self._status.name}: {self._config.namespace}/{self._config.name}",
         )
-        logging.info(f"Message sent to {self._escalation}")
+        logging.info(f"Message sent to {self._config.escalation}")
 
     def shutdown(self):
         """
@@ -155,7 +155,11 @@ class BaseCheck:
         )
         self._attempt += 1
         # run the job; this blocks until completion
-        self.run_job()
+        try:
+            self.run_job()
+        except:
+            logging.error(f"Job failed to start for {self._config.namespace}/{self._config.name}")
+            self.delete_job()
         logging.info(f"Check finished for {self._config.namespace}/{self._config.name}")
         logging.debug(
             f"Cleaning up finished job for {self._config.namespace}/{self._config.name}"
@@ -164,7 +168,7 @@ class BaseCheck:
         if self._status == Status.OK:
             # check passed, things are great!
             self._attempt = 0
-            self._next_inteval = self._config.check_interval
+            self._next_interval = self._config.check_interval
         elif self._attempt >= self._config.max_attempts:
             # state is not OK and we've run out of attempts. do the escalation
             self.escalate()

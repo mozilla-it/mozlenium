@@ -57,6 +57,8 @@ spec:
                 type: string
               status:
                 type: string
+              logs:
+                type: string
     additionalPrinterColumns:
     - name: Status
       type: string
