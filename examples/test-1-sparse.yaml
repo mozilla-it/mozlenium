@@ -54,11 +54,3 @@ data:
     console.log($secure.SECRETSTUFF);
 
     console.log("well that went great");
-  escalation_template.html: |+
-    <p>
-      <b>Name:</b> {{ namespace }}/{{ name }}<br>
-      <b>Status:</b> {{ status }}<br>
-      <b>Attempt:</b> {{ attempt }}/{{ max_attempts }}<br>
-      <b>Last Check:</b> {{ last_check }}<br>
-      <b>More Details:</b><br> {{ logs }}<br>
-    </p>
