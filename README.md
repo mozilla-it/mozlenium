@@ -14,6 +14,7 @@ done
 
 ## How to Use
 
+The mozalert CRD provides the "check" operator. Here is an example Check manifest:
 ```
 kind: Check
 metadata:
@@ -86,6 +87,44 @@ data:
     console.log("well that went great");
 ```
 
+Interacting with the operator:
+```
+$ kubectl get checks| grep "NAME\|test-1"
+NAME              STATUS   STATE   ATTEMPT   MAX_ATTEMPTS   ESCALATION                       LAST_CHECK            NEXT_CHECK            AGE
+check-test-1      OK       IDLE    0         3              afrank@mozilla.com               2020-06-16 14:07:55   2020-06-16 14:08:55   2d20h
+```
+
+Getting detailed output from a check, including logs of the last run:
+```
+$ kubectl get check check-test-1 -oyaml
+apiVersion: crd.k8s.afrank.local/v1
+kind: Check
+metadata:
+  name: check-test-1
+  namespace: default
+spec:
+  check_cm: check-test-1-cm
+  check_interval: 1m
+  escalation: afrank@mozilla.com
+  image: afrank/mozlenium
+  max_attempts: 3
+  notification_interval: 10m
+  retry_interval: 1m
+  secretRef: check-test-1-mozlenium-secrets
+status:
+  attempt: "0"
+  lastCheckTimestamp: "2020-06-16 14:11:14"
+  logs: |
+    //demo check
+    starting check
+    thisisnotsecret
+    well that went great
+    Check finished in 2 seconds with status code 0
+  nextCheckTimestamp: "2020-06-16 14:12:14"
+  state: IDLE
+  status: OK
+```
+
 ## How to Develop
 
 The entire stack is meant to run in Kubernetes but for development can be run locally or via docker.
@@ -98,5 +137,5 @@ mozalert
 ```
 
 ```
-docker build -t mozalert-controler .
+docker build -t mozalert-controller .
 ```
