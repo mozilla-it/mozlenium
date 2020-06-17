@@ -42,11 +42,13 @@ Available parameters:
 * `escalation`: 
   *REQUIRED*: The escalation target. Currently only supports email, but in the future this will be used for HTTP-based escalations as well.
 * `image`:
-  *REQUIRED*: Specify the image to be used by the checker. [Example Image](https://github.com/mozafrank/mozalert/tree/master/mozlenium)
+  *REQUIRED*: Specify the image to be used by the checker. [Example Images](https://github.com/mozafrank/mozalert/tree/master/checkers)
 * `secretRef`:
-  *REQUIRED*: The name of a secret resource to use for this check. Secrets defined here show up in the container env (or `$secure` in the case of mozlenium). This is required but doesn't have to contain any values. See example below.
+  *OPTIONAL*: The name of a secret resource to use for this check. Secrets defined here show up in the container env (or `$secure` in the case of mozlenium).
 * `check_cm`:
-  *REQUIRED*: The ConfigMap which holds your actual check code. See example below.
+  *OPTIONAL*: The ConfigMap which holds your actual check code. See example below.
+* `url`:
+  *OPTIONAL*: URL to check for url-based checks.
 * `template.spec`: 
   *OPTIONAL* Instead of specifying image, secretRef and check_cm you can override everything by defining a full pod spec which will get used by the checker. You can see examples of this [here](https://github.com/mozafrank/mozalert/blob/master/examples/test-1-with-cm.yaml) and [here](https://github.com/mozafrank/mozalert/blob/master/examples/test-1-with-secret.yaml).
 
@@ -68,7 +70,7 @@ data:
 Example ConfigMap for a mozlenium check:
 ```
 # here is the check itself, stored in a configmap
-# this block was generated with 
+# this block was generated with
 # k create configmap check-test-1-cm --from-file=./demo-check.js
 kind: ConfigMap
 apiVersion: v1
