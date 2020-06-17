@@ -12,6 +12,6 @@ spec:
   notification_interval: 5m
   max_attempts: 3
   escalation: afrank@mozilla.com
-  image: afrank/mozlenium
+  image: afrank/pinger
   url: https://www.google.com
 
