@@ -56,7 +56,7 @@ class Check(BaseCheck):
             attempt=self._status.attempt,
             max_attempts=self._config.max_attempts,
             last_check=str(self._status.last_check),
-            logs=self._logs,
+            logs=self._status.logs,
         )
         SendGridTools.send_message(
             api_key=sendgrid_key,
@@ -124,8 +124,8 @@ class Check(BaseCheck):
 
             if self._status.status != Status.PENDING and self._status.state != State.RUNNING:
                 self.get_job_logs()
-                for log_line in self._logs.split("\n"):
-                    logging.info(log_line)
+                for log_line in self._status.logs.split("\n"):
+                    logging.debug(log_line)
                 break
             sleep(self._job_poll_interval)
         logging.info(
@@ -149,7 +149,7 @@ class Check(BaseCheck):
             logs += self.pod_client.read_namespaced_pod_log(
                 pod.metadata.name, self._config.namespace
             )
-        self._logs = logs
+        self._status.logs = logs
 
     def get_job_status(self):
         """

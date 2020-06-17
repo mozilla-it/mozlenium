@@ -44,6 +44,8 @@ spec:
                 type: string
               check_cm:
                 type: string
+              url:
+                type: string
           status:
             type: object
             properties:

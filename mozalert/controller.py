@@ -1,6 +1,7 @@
 from kubernetes import client, config, watch
 import os
 import logging
+import threading
 
 from mozalert.check import Check
 
@@ -18,6 +19,7 @@ class Controller:
         self._domain = kwargs.get("domain", "crd.k8s.afrank.local")
         self._version = kwargs.get("version", "v1")
         self._plural = kwargs.get("plural", "checks")
+        self._check_cluster_interval = kwargs.get("check_cluster_interval", 60)
 
         if "KUBERNETES_PORT" in os.environ:
             config.load_incluster_config()
@@ -43,21 +45,27 @@ class Controller:
         return self._threads
 
     @staticmethod
-    def build_spec(name, image, secretRef, check_cm):
-        return {
+    def build_spec(name, image, **kwargs):
+        secretRef = kwargs.get("secretRef",None)
+        check_cm = kwargs.get("check_cm",None)
+        url = kwargs.get("url",None)
+        template = {
             "restart_policy": "Never",
             "containers": [
                 {
                     "name": name,
                     "image": image,
-                    "envFrom": [{"secretRef": {"name": secretRef}}],
-                    "volumeMounts": [
-                        {"name": "checks", "mountPath": "/checks", "readOnly": True}
-                    ],
                 }
             ],
-            "volumes": [{"name": "checks", "configMap": {"name": check_cm}}],
         }
+        if secretRef:
+            template["containers"][0]["envFrom"] = [{"secretRef": {"name": secretRef}}]
+        if check_cm:
+            template["containers"][0]["volumeMounts"] = [{"name": "checks", "mountPath": "/checks", "readOnly": True}]
+            template["volumes"] = [{"name": "checks", "configMap": {"name": check_cm}}]
+        if url:
+            template["containers"][0]["args"] = [url]
+        return template
 
     @staticmethod
     def parse_time(time_str):
@@ -71,7 +79,7 @@ class Controller:
             # didn't pass a number, move on to parse the string
             pass
         regex = re.compile(
-            r"((?P<hours>\d+?)hr)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?"
+            r"((?P<hours>\d+?)h)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?"
         )
         parts = regex.match(time_str)
         if not parts:
@@ -82,6 +90,65 @@ class Controller:
             if param:
                 time_params[name] = int(param)
         return timedelta(**time_params)
+
+    def check_cluster(self):
+        """
+        a thread which runs periodically and provides a sanity check that things are working
+        as they should. When the check is done, it sends a message to a passive monitor so
+        we know the check has run successfully.
+
+        We perform the following actions:
+        * check the status of each thread in the self._threads list
+        * make sure all next_check's are in the future
+        * compare the k8s state to the running cluster state
+        * send cluster telemetry to prometheus
+        * send cluster telemetry to deadmanssnitch
+        """
+        logging.info("Checking Cluster Status")
+
+        checks = {}
+        check_list = self._clients["crd_client"].list_cluster_custom_object(
+            self._domain,
+            self._version,
+            self._plural,
+            watch=False
+        )
+
+        for obj in check_list.get("items"):
+            name = obj["metadata"]["name"]
+            namespace = obj["metadata"]["namespace"]
+            tname = f"{namespace}/{name}"
+            checks[tname] = obj
+
+        for tname in checks.keys():
+            if tname not in self._threads:
+                logging.info(f"thread {tname} not found in self._threads")
+            check_status = checks[tname].get("status")
+            thread_status = self._threads[tname].status
+            if (
+                int(check_status.get("attempt")) != thread_status.attempt
+                or check_status.get("state") != thread_status.state.name
+                or check_status.get("status") != thread_status.status.name
+                ):
+                logging.info("Check status does not match thread status!")
+                logging.info(check_status)
+                logging.info(thread_status)
+
+        for tname in self._threads:
+            if str(tname) not in checks:
+                logging.info(f"{tname} not found in server-side checks")
+
+        self.start_cluster_monitor()
+
+    def start_cluster_monitor(self):
+        """
+        Handle the check_cluster thread
+        """
+
+        logging.info(f"Starting cluster monitor thread at interval {self._check_cluster_interval}")
+        self._check_thread = threading.Timer(self._check_cluster_interval, self.check_cluster)
+        self._check_thread.setName("cluster-monitor")
+        self._check_thread.start()
 
     def run(self):
         """
@@ -103,6 +170,8 @@ class Controller:
                and restart.
 
         """
+
+        self.start_cluster_monitor()
 
         logging.info("Waiting for events...")
         resource_version = ""
@@ -167,6 +236,7 @@ class Controller:
                         image=spec.get("image", None),
                         secretRef=spec.get("secretRef", None),
                         check_cm=spec.get("check_cm", None),
+                        url=spec.get("url",None),
                     )
 
                 logging.debug(

@@ -89,7 +89,7 @@ data:
 
 Interacting with the operator:
 ```
-$ kubectl get checks| grep "NAME\|test-1"
+$ kubectl get checks
 NAME              STATUS   STATE   ATTEMPT   MAX_ATTEMPTS   ESCALATION                       LAST_CHECK            NEXT_CHECK            AGE
 check-test-1      OK       IDLE    0         3              afrank@mozilla.com               2020-06-16 14:07:55   2020-06-16 14:08:55   2d20h
 ```
