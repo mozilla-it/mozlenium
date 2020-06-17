@@ -52,17 +52,17 @@ class Check(BaseCheck):
         message = self._config.escalation_template.format(
             name=self._config.name,
             namespace=self._config.namespace,
-            status=self._status.name,
-            attempt=self._attempt,
+            status=self._status.status.name,
+            attempt=self._status.attempt,
             max_attempts=self._config.max_attempts,
-            last_check=str(self._last_check),
+            last_check=str(self._status.last_check),
             logs=self._logs,
         )
         SendGridTools.send_message(
             api_key=sendgrid_key,
             to_emails=[self._config.escalation],
             message=message,
-            subject=f"Mozalert {self._status.name}: {self._config.namespace}/{self._config.name}",
+            subject=f"Mozalert {self._status.status.name}: {self._config.namespace}/{self._config.name}",
         )
         logging.info(f"Message sent to {self._config.escalation}")
 
@@ -100,14 +100,14 @@ class Check(BaseCheck):
             logging.info(e)
             raise
 
-        self._state = State.RUNNING
+        self._status.state = State.RUNNING
         self.set_crd_status()
 
         # wait for the job to finish
         while True:
             status = self.get_job_status()
-            if status.active and self._state != State.RUNNING:
-                self._state = State.RUNNING
+            if status.active and self._status.state != State.RUNNING:
+                self._status.state = State.RUNNING
                 logging.info("Setting the state to RUNNING")
             if status.start_time:
                 self._runtime = datetime.datetime.utcnow() - status.start_time.replace(
@@ -115,24 +115,24 @@ class Check(BaseCheck):
                 )
             if status.succeeded:
                 logging.info("Setting the job status to OK")
-                self._status = Status.OK
-                self._state = State.IDLE
+                self._status.status = Status.OK
+                self._status.state = State.IDLE
             elif status.failed:
                 logging.info("Setting the job status to CRITICAL")
-                self._status = Status.CRITICAL
-                self._state = State.IDLE
+                self._status.status = Status.CRITICAL
+                self._status.state = State.IDLE
 
-            if self._status != Status.PENDING and self._state != State.RUNNING:
+            if self._status.status != Status.PENDING and self._status.state != State.RUNNING:
                 self.get_job_logs()
                 for log_line in self._logs.split("\n"):
                     logging.info(log_line)
                 break
             sleep(self._job_poll_interval)
         logging.info(
-            f"Job finished for {self._config.namespace}/{self._config.name} in {self._runtime.seconds} seconds with status {self._status}"
+            f"Job finished for {self._config.namespace}/{self._config.name} in {self._runtime.seconds} seconds with status {self._status.status}"
         )
-        self._state = State.IDLE
-        self._last_check = pytz.utc.localize(datetime.datetime.utcnow())
+        self._status.state = State.IDLE
+        self._status.last_check = pytz.utc.localize(datetime.datetime.utcnow())
         self.set_crd_status()
 
     def get_job_logs(self):
@@ -196,12 +196,12 @@ class Check(BaseCheck):
 
         status = {
             "status": {
-                "status": str(self._status.name),
-                "state": str(self._state.name),
-                "attempt": str(self._attempt),
-                "lastCheckTimestamp": str(self._last_check).split(".")[0],
-                "nextCheckTimestamp": str(self._next_check).split(".")[0],
-                "logs": self._logs,
+                "status": str(self._status.status.name),
+                "state": str(self._status.state.name),
+                "attempt": str(self._status.attempt),
+                "lastCheckTimestamp": str(self._status.last_check).split(".")[0],
+                "nextCheckTimestamp": str(self._status.next_check).split(".")[0],
+                "logs": self._status.logs,
             }
         }
 

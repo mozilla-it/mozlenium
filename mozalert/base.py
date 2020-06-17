@@ -49,18 +49,18 @@ class BaseCheck:
         # initialize the check for the first time
         if not self._update:
             self._shutdown = False
-            self._attempt = 0
             self._runtime = 0
-            self._last_check = None
-            self._next_check = None
-            self._logs = ""
-
-            self._status = Status.PENDING
-            self._state = State.IDLE
-
             self._thread = None
-
             self._next_interval = self._config.check_interval
+
+            self._status = SimpleNamespace(
+                status=Status.PENDING,
+                state=State.IDLE,
+                last_check = None,
+                next_check = None,
+                attempt = 0,
+                logs = "",
+            )
 
             self.start_thread()
             self.set_crd_status()
@@ -68,6 +68,10 @@ class BaseCheck:
     @property
     def config(self):
         return self._config
+
+    @property
+    def status(self):
+        return self._status
 
     @property
     def thread(self):
@@ -124,7 +128,7 @@ class BaseCheck:
         logging.info(
             f"Running the check thread instance for {self._config.namespace}/{self._config.name}"
         )
-        self._attempt += 1
+        self._status.attempt += 1
         # run the job; this blocks until completion
         try:
             self.run_job()
@@ -138,11 +142,11 @@ class BaseCheck:
             f"Cleaning up finished job for {self._config.namespace}/{self._config.name}"
         )
         self.delete_job()
-        if self._status == Status.OK:
+        if self._status.status == Status.OK:
             # check passed, things are great!
-            self._attempt = 0
+            self._status.attempt = 0
             self._next_interval = self._config.check_interval
-        elif self._attempt >= self._config.max_attempts:
+        elif self._status.attempt >= self._config.max_attempts:
             # state is not OK and we've run out of attempts. do the escalation
             self.escalate()
             self._next_interval = self._config.notification_interval
@@ -152,7 +156,7 @@ class BaseCheck:
             self._next_interval = self._config.retry_interval
 
         # set the next_check for the CRD status
-        self._next_check = pytz.utc.localize(
+        self._status.next_check = pytz.utc.localize(
             datetime.datetime.utcnow()
         ) + datetime.timedelta(seconds=self._next_interval)
         if not self._shutdown:
@@ -175,6 +179,6 @@ class BaseCheck:
         self._thread.setName(f"{self._config.namespace}/{self._config.name}")
         self._thread.start()
 
-        self._next_check = pytz.utc.localize(
+        self._status.next_check = pytz.utc.localize(
             datetime.datetime.utcnow()
         ) + datetime.timedelta(seconds=self._next_interval)
