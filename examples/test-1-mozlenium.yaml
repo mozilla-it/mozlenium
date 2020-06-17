@@ -4,7 +4,7 @@
 apiVersion: "crd.k8s.afrank.local/v1"
 kind: Check
 metadata:
-  name: check-test-1
+  name: test-1-mozlenium
   namespace: default
 spec:
   check_interval: 1m
@@ -13,8 +13,8 @@ spec:
   max_attempts: 3
   escalation: afrank@mozilla.com
   image: afrank/mozlenium
-  secretRef: check-test-1-mozlenium-secrets
-  check_cm: check-test-1-cm
+  secretRef: test-1-mozlenium-secrets
+  check_cm: test-1-mozlenium-cm
 
 ---
 # here is where you put any secrets you want your
@@ -24,7 +24,7 @@ kind: Secret
 type: Opaque
 apiVersion: v1
 metadata:
-  name: check-test-1-mozlenium-secrets
+  name: test-1-mozlenium-secrets
   namespace: default
 data:
   SECRETSTUFF: dGhpc2lzbm90c2VjcmV0
@@ -36,7 +36,7 @@ data:
 kind: ConfigMap
 apiVersion: v1
 metadata:
-  name: check-test-1-cm
+  name: test-1-mozlenium-cm
   namespace: default
 data:
   demo-check.js: |+

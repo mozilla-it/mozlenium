@@ -1,0 +1,17 @@
+---
+# define intervals and escalations
+# in your Check resource
+apiVersion: "crd.k8s.afrank.local/v1"
+kind: Check
+metadata:
+  name: test-1-pinger
+  namespace: default
+spec:
+  check_interval: 1m
+  retry_interval: 3m
+  notification_interval: 5m
+  max_attempts: 3
+  escalation: afrank@mozilla.com
+  image: afrank/mozlenium
+  url: https://www.google.com
+
