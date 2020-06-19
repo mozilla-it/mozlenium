@@ -46,9 +46,9 @@ class Controller:
 
     @staticmethod
     def build_spec(name, image, **kwargs):
-        secretRef = kwargs.get("secretRef",None)
+        secret_ref = kwargs.get("secret_ref",None)
         check_cm = kwargs.get("check_cm",None)
-        url = kwargs.get("url",None)
+        check_url = kwargs.get("check_url",None)
         template = {
             "restart_policy": "Never",
             "containers": [
@@ -58,13 +58,13 @@ class Controller:
                 }
             ],
         }
-        if secretRef:
-            template["containers"][0]["envFrom"] = [{"secretRef": {"name": secretRef}}]
+        if secret_ref:
+            template["containers"][0]["envFrom"] = [{"secretRef": {"name": secret_ref}}]
         if check_cm:
             template["containers"][0]["volumeMounts"] = [{"name": "checks", "mountPath": "/checks", "readOnly": True}]
             template["volumes"] = [{"name": "checks", "configMap": {"name": check_cm}}]
-        if url:
-            template["containers"][0]["args"] = [url]
+        if check_url:
+            template["containers"][0]["args"] = [check_url]
         return template
 
     @staticmethod
@@ -100,6 +100,7 @@ class Controller:
         We perform the following actions:
         * check the status of each thread in the self._threads list
         * make sure all next_check's are in the future
+        * checks haven't been in running state too long
         * compare the k8s state to the running cluster state
         * send cluster telemetry to prometheus
         * send cluster telemetry to deadmanssnitch
@@ -212,7 +213,8 @@ class Controller:
                     ).seconds,
                 }
                 max_attempts = spec.get("max_attempts", 3)
-                escalation = spec.get("escalation", "")
+
+                escalations = spec.get("escalations", [])
 
                 metadata = obj.get("metadata")
                 name = metadata.get("name")
@@ -228,15 +230,14 @@ class Controller:
                 # secretRef: where you store secrets to be passed to your chec
                 #            as env vars
                 # check_cm: the configMap containing the body of your check
-                pod_template = spec.get("template", {})
-                pod_spec = pod_template.get("spec", {})
+                pod_spec = spec.get("podSpec", {})
                 if not pod_spec:
                     pod_spec = self.build_spec(
                         name=name,
                         image=spec.get("image", None),
-                        secretRef=spec.get("secretRef", None),
+                        secret_ref=spec.get("secret_ref", None),
                         check_cm=spec.get("check_cm", None),
-                        url=spec.get("url",None),
+                        check_url=spec.get("check_url",None),
                     )
 
                 logging.debug(
@@ -250,7 +251,7 @@ class Controller:
                         namespace=namespace,
                         spec=pod_spec,
                         max_attempts=max_attempts,
-                        escalation=escalation,
+                        escalations=escalations,
                         **self._clients,
                         **intervals,
                     )
@@ -272,7 +273,7 @@ class Controller:
                         != intervals["retry_interval"]
                         or self._threads[thread_name].config.max_attempts
                         != max_attempts
-                        or self._threads[thread_name].config.escalation != escalation
+                        or self._threads[thread_name].config.escalations != escalations
                     ):
                         logging.info(
                             f"Detected a modification to {thread_name}, restarting the thread"
@@ -285,7 +286,7 @@ class Controller:
                                 namespace=namespace,
                                 spec=pod_spec,
                                 max_attempts=max_attempts,
-                                escalation=escalation,
+                                escalations=escalations,
                                 **self._clients,
                                 **intervals,
                             )

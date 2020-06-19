@@ -36,15 +36,18 @@ spec:
                 x-kubernetes-int-or-string: true
               max_attempts:
                 x-kubernetes-int-or-string: true
-              escalation:
-                type: string
+              escalations:
+                type: array
+                items:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
               image:
                 type: string
-              secretRef:
+              secret_ref:
                 type: string
               check_cm:
                 type: string
-              url:
+              check_url:
                 type: string
           status:
             type: object
@@ -78,10 +81,6 @@ spec:
       type: string
       description: Maximum Attempts until escalation
       jsonPath: .spec.max_attempts
-    - name: Escalation
-      type: string
-      description: Escalation
-      jsonPath: .spec.escalation
     - name: Last_Check
       type: string
       description: Last Check

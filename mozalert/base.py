@@ -37,7 +37,7 @@ class BaseCheck:
             check_interval=float(kwargs.get("check_interval")),
             retry_interval=float(kwargs.get("retry_interval", 0)),
             notification_interval=float(kwargs.get("notification_interval", 0)),
-            escalation=kwargs.get("escalation", ""),
+            escalations=kwargs.get("escalations", []),
             max_attempts=int(kwargs.get("max_attempts", "3")),
         )
 

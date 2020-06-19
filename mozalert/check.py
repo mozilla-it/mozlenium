@@ -10,7 +10,8 @@ import pytz
 
 from mozalert.state import State, Status
 from mozalert.base import BaseCheck
-from mozalert.utils.sendgrid import SendGridTools
+
+import importlib
 
 # kubernetes.client.rest.ApiException
 
@@ -31,40 +32,25 @@ class Check(BaseCheck):
 
         super().__init__(**kwargs)
 
-        default_escalation_template = """
-        <p>
-        <b>Name:</b> {namespace}/{name}<br>
-        <b>Status:</b> {status}<br>                            
-        <b>Attempt:</b> {attempt}/{max_attempts}<br>
-        <b>Last Check:</b> {last_check}<br>
-        <b>More Details:</b><br> <pre>{logs}</pre><br>
-        </p>
-        """
-
         self._config.spec = kwargs.get("spec", {})
-        self._config.escalation_template = kwargs.get(
-            "escalation_template", default_escalation_template
-        )
 
     def escalate(self):
         logging.info(f"Escalating {self._config.namespace}/{self._config.name}")
-        sendgrid_key = os.environ.get("SENDGRID_API_KEY", "")
-        message = self._config.escalation_template.format(
-            name=self._config.name,
-            namespace=self._config.namespace,
-            status=self._status.status.name,
-            attempt=self._status.attempt,
-            max_attempts=self._config.max_attempts,
-            last_check=str(self._status.last_check),
-            logs=self._status.logs,
-        )
-        SendGridTools.send_message(
-            api_key=sendgrid_key,
-            to_emails=[self._config.escalation],
-            message=message,
-            subject=f"Mozalert {self._status.status.name}: {self._config.namespace}/{self._config.name}",
-        )
-        logging.info(f"Message sent to {self._config.escalation}")
+        for esc in self._config.escalations:
+            escalation_type = esc.get("type","email")
+            args = esc.get("args",{})
+            module = importlib.import_module(f".escalations.{escalation_type}", "mozalert")
+            Escalation = getattr(module,"Escalation")
+            e = Escalation(
+                f"{self._config.namespace}/{self._config.name}",
+                self._status.status.name,
+                attempt=self._status.attempt,
+                max_attempts=self._config.max_attempts,
+                last_check=str(self._status.last_check),
+                logs=self._status.logs,
+                args=args,
+            )
+            e.run()
 
     def run_job(self):
         """

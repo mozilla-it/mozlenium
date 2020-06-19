@@ -17,8 +17,6 @@ if [[ ! -e $f ]]; then
   exit 2
 fi
 
-head -1 $f || true
-
 export NODE_PATH=/app/node_modules
 
 start=$(date +%s)

@@ -25,9 +25,12 @@ spec:
   retry_interval: 3m
   notification_interval: 5m
   max_attempts: 3
-  escalation: you@email.com
+  escalations:
+  - type: email
+    args:
+      email: you@email.com
   image: afrank/mozlenium
-  secretRef: check-test-1-mozlenium-secrets
+  secret_ref: check-test-1-mozlenium-secrets
   check_cm: check-test-1-cm
 ```
 Available parameters:
@@ -39,18 +42,18 @@ Available parameters:
   *OPTIONAL*: Define the check interval while the check is in an escalated state. This is also the interval for which alerts are sent out. If not specified this is set to `check_interval`.
 * `max_attempts`:
   *REQUIRED*: The number of check attempts before a check enters a failed state and escalation begins.
-* `escalation`: 
-  *REQUIRED*: The escalation target. Currently only supports email, but in the future this will be used for HTTP-based escalations as well.
+* `escalations`: 
+  *REQUIRED*: A List of escalations defined by a dictionary with keys `type` and `args`. Currently only supports email, but in the future this will be used for HTTP-based escalations as well. For an escalation of type email, one arg is required, with key "email".
 * `image`:
   *REQUIRED*: Specify the image to be used by the checker. [Example Images](https://github.com/mozafrank/mozalert/tree/master/checkers)
-* `secretRef`:
+* `secret_ref`:
   *OPTIONAL*: The name of a secret resource to use for this check. Secrets defined here show up in the container env (or `$secure` in the case of mozlenium).
 * `check_cm`:
   *OPTIONAL*: The ConfigMap which holds your actual check code. See example below.
 * `url`:
   *OPTIONAL*: URL to check for url-based checks.
 * `template.spec`: 
-  *OPTIONAL* Instead of specifying image, secretRef and check_cm you can override everything by defining a full pod spec which will get used by the checker. You can see examples of this [here](https://github.com/mozafrank/mozalert/blob/master/examples/test-1-with-cm.yaml) and [here](https://github.com/mozafrank/mozalert/blob/master/examples/test-1-with-secret.yaml).
+  *OPTIONAL* Instead of specifying image, secret_ref and check_cm you can override everything by defining a full pod spec which will get used by the checker. You can see examples of this [here](https://github.com/mozafrank/mozalert/blob/master/examples/test-1-with-cm.yaml) and [here](https://github.com/mozafrank/mozalert/blob/master/examples/test-1-with-secret.yaml).
 
 Example secret manifest for a check:
 ```
@@ -107,12 +110,15 @@ metadata:
 spec:
   check_cm: check-test-1-cm
   check_interval: 1m
-  escalation: afrank@mozilla.com
+  escalations:
+  - type: email
+    args:
+      email: afrank@mozilla.com
   image: afrank/mozlenium
   max_attempts: 3
   notification_interval: 10m
   retry_interval: 1m
-  secretRef: check-test-1-mozlenium-secrets
+  secret_ref: check-test-1-mozlenium-secrets
 status:
   attempt: "0"
   lastCheckTimestamp: "2020-06-16 14:11:14"

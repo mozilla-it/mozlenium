@@ -11,7 +11,10 @@ spec:
   retry_interval: 3m
   notification_interval: 5m
   max_attempts: 3
-  escalation: afrank@mozilla.com
+  escalations:
+  - type: email
+    args:
+      email: afrank@mozilla.com
   image: afrank/pinger
   url: https://www.google.com
 
