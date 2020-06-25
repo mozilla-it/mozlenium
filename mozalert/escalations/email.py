@@ -10,6 +10,25 @@ class Escalation(BaseEscalation):
         self.email = self.args.get("email")
         self.api_key = os.environ.get("SENDGRID_API_KEY", "")
         self.from_email = "Mozalert <afrank+mozalert@mozilla.com>"
+        self.message = f"""
+            <p>
+            <b>Name:</b> {self.name}<br>
+            <b>Status:</b> {self.status}<br>
+            """
+        if self.attempt and self.max_attempts:
+            self.message += (
+                "\n" + f"<b>Attempt:</b> {self.attempt}/{self.max_attempts}<br>"
+            )
+        elif self.attempt:
+            self.message += "\n" + f"<b>Attempt:</b> {self.attempt}<br>"
+        if self.last_check:
+            self.message += "\n" + f"<b>Last Check:</b> {self.last_check}<br>"
+        if self.logs:
+            self.message += (
+                "\n" + f"<b>More Details:</b><br> <pre>{self.logs}</pre><br>"
+            )
+        self.message += "\n" + "</p>"
+        self.subject = f"Mozalert {self.status}: {self.name}"
 
     def run(self):
         SendGridTools.send_message(
