@@ -55,6 +55,7 @@ class BaseCheck:
             self._shutdown = False
             self._runtime = 0
             self._thread = None
+            self._escalated = False
             self._next_interval = self.config.check_interval
 
             self._status = Status(status=EnumStatus.PENDING, state=EnumState.IDLE)
@@ -73,7 +74,7 @@ class BaseCheck:
                 )
                 self.status.logs = self._pre_status.get("logs", self.status.logs)
                 if self.status.state == EnumState.RUNNING:
-                    # when the pre_status was created a check was running, 
+                    # when the pre_status was created a check was running,
                     # that check is dead to us so we need to just decrement our attempt,
                     # and reschedule the check ASAP
                     self._next_interval = 1
@@ -100,6 +101,10 @@ class BaseCheck:
     @property
     def thread(self):
         return self._thread
+
+    @property
+    def escalated(self):
+        return self._escalated
 
     def __repr__(self):
         return f"{self.config.namespace}/{self.config.name}"
@@ -158,13 +163,20 @@ class BaseCheck:
         logging.info("Check finished")
         logging.debug("Cleaning up finished job")
         self.delete_job()
-        if self.status.status == EnumStatus.OK:
+        if self.status.status == EnumStatus.OK and self.escalated:
+            # recovery!
+            self.escalate()
+            self._escalated = False
+            self.status.attempt = 0
+            self._next_interval = self.config.check_interval
+        elif self.status.status == EnumStatus.OK:
             # check passed, things are great!
             self.status.attempt = 0
             self._next_interval = self.config.check_interval
         elif self.status.attempt >= self.config.max_attempts:
             # state is not OK and we've run out of attempts. do the escalation
             self.escalate()
+            self._escalated = True
             self._next_interval = self.config.notification_interval
             # ^ TODO keep retrying after escalation? giveup? reset?
         else:
