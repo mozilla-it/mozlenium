@@ -44,24 +44,37 @@ class Controller:
     def threads(self):
         return self._threads
 
+    @property
+    def clients(self):
+        return self._clients
+
+    @property
+    def domain(self):
+        return self._domain
+
+    @property
+    def version(self):
+        return self._version
+
+    @property
+    def plural(self):
+        return self._plural
+
     @staticmethod
     def build_spec(name, image, **kwargs):
-        secret_ref = kwargs.get("secret_ref",None)
-        check_cm = kwargs.get("check_cm",None)
-        check_url = kwargs.get("check_url",None)
+        secret_ref = kwargs.get("secret_ref", None)
+        check_cm = kwargs.get("check_cm", None)
+        check_url = kwargs.get("check_url", None)
         template = {
             "restart_policy": "Never",
-            "containers": [
-                {
-                    "name": name,
-                    "image": image,
-                }
-            ],
+            "containers": [{"name": name, "image": image,}],
         }
         if secret_ref:
             template["containers"][0]["envFrom"] = [{"secretRef": {"name": secret_ref}}]
         if check_cm:
-            template["containers"][0]["volumeMounts"] = [{"name": "checks", "mountPath": "/checks", "readOnly": True}]
+            template["containers"][0]["volumeMounts"] = [
+                {"name": "checks", "mountPath": "/checks", "readOnly": True}
+            ]
             template["volumes"] = [{"name": "checks", "configMap": {"name": check_cm}}]
         if check_url:
             template["containers"][0]["args"] = [check_url]
@@ -98,7 +111,7 @@ class Controller:
         we know the check has run successfully.
 
         We perform the following actions:
-        * check the status of each thread in the self._threads list
+        * check the status of each thread in the self.threads list
         * make sure all next_check's are in the future
         * checks haven't been in running state too long
         * compare the k8s state to the running cluster state
@@ -108,11 +121,8 @@ class Controller:
         logging.info("Checking Cluster Status")
 
         checks = {}
-        check_list = self._clients["crd_client"].list_cluster_custom_object(
-            self._domain,
-            self._version,
-            self._plural,
-            watch=False
+        check_list = self.clients["crd_client"].list_cluster_custom_object(
+            self.domain, self.version, self.plural, watch=False
         )
 
         for obj in check_list.get("items"):
@@ -122,20 +132,22 @@ class Controller:
             checks[tname] = obj
 
         for tname in checks.keys():
-            if tname not in self._threads:
-                logging.info(f"thread {tname} not found in self._threads")
+            if tname not in self.threads:
+                logging.info(f"thread {tname} not found in self.threads")
             check_status = checks[tname].get("status")
-            thread_status = self._threads[tname].status
+            thread_status = self.threads[tname].status
             if (
                 int(check_status.get("attempt")) != thread_status.attempt
                 or check_status.get("state") != thread_status.state.name
                 or check_status.get("status") != thread_status.status.name
-                ):
+            ):
                 logging.info("Check status does not match thread status!")
                 logging.info(check_status)
-                logging.info(thread_status)
+                logging.info(
+                    f"{thread_status.status.name} {thread_status.state.name} {thread_status.attempt}"
+                )
 
-        for tname in self._threads:
+        for tname in self.threads:
             if str(tname) not in checks:
                 logging.info(f"{tname} not found in server-side checks")
 
@@ -146,8 +158,12 @@ class Controller:
         Handle the check_cluster thread
         """
 
-        logging.info(f"Starting cluster monitor thread at interval {self._check_cluster_interval}")
-        self._check_thread = threading.Timer(self._check_cluster_interval, self.check_cluster)
+        logging.info(
+            f"Starting cluster monitor thread at interval {self._check_cluster_interval}"
+        )
+        self._check_thread = threading.Timer(
+            self._check_cluster_interval, self.check_cluster
+        )
         self._check_thread.setName("cluster-monitor")
         self._check_thread.start()
 
@@ -178,10 +194,10 @@ class Controller:
         resource_version = ""
         while True:
             stream = watch.Watch().stream(
-                self._clients["crd_client"].list_cluster_custom_object,
-                self._domain,
-                self._version,
-                self._plural,
+                self.clients["crd_client"].list_cluster_custom_object,
+                self.domain,
+                self.version,
+                self.plural,
                 resource_version=resource_version,
             )
             for event in stream:
@@ -201,6 +217,7 @@ class Controller:
                     continue
 
                 spec = obj.get("spec")
+                status = obj.get("status", {})
                 intervals = {
                     "check_interval": self.parse_time(
                         spec.get("check_interval")
@@ -237,7 +254,7 @@ class Controller:
                         image=spec.get("image", None),
                         secret_ref=spec.get("secret_ref", None),
                         check_cm=spec.get("check_cm", None),
-                        check_url=spec.get("check_url",None),
+                        check_url=spec.get("check_url", None),
                     )
 
                 logging.debug(
@@ -252,7 +269,8 @@ class Controller:
                         spec=pod_spec,
                         max_attempts=max_attempts,
                         escalations=escalations,
-                        **self._clients,
+                        pre_status=status,
+                        **self.clients,
                         **intervals,
                     )
                 elif operation == "DELETED":
@@ -264,21 +282,20 @@ class Controller:
                 elif operation == "MODIFIED":
                     # TODO come up with a better way to do this
                     if (
-                        self._threads[thread_name].config.spec != pod_spec
-                        or self._threads[thread_name].config.notification_interval
+                        self.threads[thread_name].config.spec != pod_spec
+                        or self.threads[thread_name].config.notification_interval
                         != intervals["notification_interval"]
-                        or self._threads[thread_name].config.check_interval
+                        or self.threads[thread_name].config.check_interval
                         != intervals["check_interval"]
-                        or self._threads[thread_name].config.retry_interval
+                        or self.threads[thread_name].config.retry_interval
                         != intervals["retry_interval"]
-                        or self._threads[thread_name].config.max_attempts
-                        != max_attempts
-                        or self._threads[thread_name].config.escalations != escalations
+                        or self.threads[thread_name].config.max_attempts != max_attempts
+                        or self.threads[thread_name].config.escalations != escalations
                     ):
                         logging.info(
                             f"Detected a modification to {thread_name}, restarting the thread"
                         )
-                        if thread_name in self._threads:
+                        if thread_name in self.threads:
                             self._threads[thread_name].shutdown()
                             del self._threads[thread_name]
                             self._threads[thread_name] = Check(
@@ -287,7 +304,7 @@ class Controller:
                                 spec=pod_spec,
                                 max_attempts=max_attempts,
                                 escalations=escalations,
-                                **self._clients,
+                                **self.clients,
                                 **intervals,
                             )
                     else:

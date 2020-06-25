@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import datetime
 import pytz
 
-from mozalert.state import State, Status
+from mozalert.status import EnumState, EnumStatus, Status
 
 
 class BaseCheck:
@@ -30,6 +30,10 @@ class BaseCheck:
 
         self._job_poll_interval = float(kwargs.get("job_poll_interval", 3))
         self._update = kwargs.get("update", False)
+        # if the process is restarted the status is re-read
+        # from k8s and fed into the new check
+        # this is removed from the object once its read
+        self._pre_status = kwargs.get("pre_status", {})
 
         self._config = SimpleNamespace(
             name=kwargs.get("name"),
@@ -41,26 +45,46 @@ class BaseCheck:
             max_attempts=int(kwargs.get("max_attempts", "3")),
         )
 
-        if not self._config.retry_interval:
-            self._config.retry_interval = self._config.check_interval
-        if not self._config.notification_interval:
-            self._config.notification_interval = self._config.check_interval
+        if not self.config.retry_interval:
+            self._config.retry_interval = self.config.check_interval
+        if not self.config.notification_interval:
+            self._config.notification_interval = self.config.check_interval
 
         # initialize the check for the first time
         if not self._update:
             self._shutdown = False
             self._runtime = 0
             self._thread = None
-            self._next_interval = self._config.check_interval
+            self._next_interval = self.config.check_interval
 
-            self._status = SimpleNamespace(
-                status=Status.PENDING,
-                state=State.IDLE,
-                last_check = None,
-                next_check = None,
-                attempt = 0,
-                logs = "",
-            )
+            self._status = Status(status=EnumStatus.PENDING, state=EnumState.IDLE)
+
+            if self._pre_status:
+                self.status.status = self._pre_status.get("status", self.status.status)
+                self.status.state = self._pre_status.get("state", self.status.state)
+                self.status.last_check = self._pre_status.get(
+                    "lastCheckTimestamp", self.status.last_check
+                )
+                self.status.next_check = self._pre_status.get(
+                    "nextCheckTimestamp", self.status.next_check
+                )
+                self.status.attempt = self._pre_status.get(
+                    "attempt", self.status.attempt
+                )
+                self.status.logs = self._pre_status.get("logs", self.status.logs)
+                if self.status.state == EnumState.RUNNING:
+                    # when the pre_status was created a check was running, 
+                    # that check is dead to us so we need to just decrement our attempt,
+                    # and reschedule the check ASAP
+                    self._next_interval = 1
+                    if self.status.attempt:
+                        self.status.attempt -= 1
+                elif self.status.next_check:
+                    self._next_interval = (
+                        pytz.utc.localize(self.status.next_check)
+                        - pytz.utc.localize(datetime.datetime.utcnow())
+                    ).seconds
+                self._pre_status = {}
 
             self.start_thread()
             self.set_crd_status()
@@ -78,7 +102,7 @@ class BaseCheck:
         return self._thread
 
     def __repr__(self):
-        return f"{self._config.namespace}/{self._config.name}"
+        return f"{self.config.namespace}/{self.config.name}"
 
     def run_job(self):
         logging.info("Executing mock run_job")
@@ -100,16 +124,14 @@ class BaseCheck:
         logging.info("Executing mock delete_job")
 
     def escalate(self):
-        logging.info(f"Executing mock escalation")
+        logging.info("Executing mock escalation")
 
     def shutdown(self):
         """
         stop the thread and cleanup any leftover jobs
         """
         self._shutdown = True
-        logging.debug(
-            f"Stopping check thread for {self._config.namespace}/{self._config.name}"
-        )
+        logging.debug("Stopping check thread")
         if self._thread:
             try:
                 self._thread.cancel()
@@ -125,42 +147,36 @@ class BaseCheck:
         main thread for creating then watching a check job; this is called by 
         the Timer thread.
         """
-        logging.info(
-            f"Running the check thread instance for {self._config.namespace}/{self._config.name}"
-        )
-        self._status.attempt += 1
+        self.status.attempt += 1
+        logging.info(f"Starting check attempt {self.status.attempt}")
         # run the job; this blocks until completion
         try:
             self.run_job()
         except:
-            logging.error(
-                f"Job failed to start for {self._config.namespace}/{self._config.name}"
-            )
+            logging.error("Job failed to start")
             self.delete_job()
-        logging.info(f"Check finished for {self._config.namespace}/{self._config.name}")
-        logging.debug(
-            f"Cleaning up finished job for {self._config.namespace}/{self._config.name}"
-        )
+        logging.info("Check finished")
+        logging.debug("Cleaning up finished job")
         self.delete_job()
-        if self._status.status == Status.OK:
+        if self.status.status == EnumStatus.OK:
             # check passed, things are great!
-            self._status.attempt = 0
-            self._next_interval = self._config.check_interval
-        elif self._status.attempt >= self._config.max_attempts:
+            self.status.attempt = 0
+            self._next_interval = self.config.check_interval
+        elif self.status.attempt >= self.config.max_attempts:
             # state is not OK and we've run out of attempts. do the escalation
             self.escalate()
-            self._next_interval = self._config.notification_interval
+            self._next_interval = self.config.notification_interval
             # ^ TODO keep retrying after escalation? giveup? reset?
         else:
             # not state OK and not enough failures to escalate
-            self._next_interval = self._config.retry_interval
+            self._next_interval = self.config.retry_interval
 
         # set the next_check for the CRD status
-        self._status.next_check = pytz.utc.localize(
+        self.status.next_check = pytz.utc.localize(
             datetime.datetime.utcnow()
         ) + datetime.timedelta(seconds=self._next_interval)
         if not self._shutdown:
-            # officially schedule the next run
+            # schedule the next run
             self.start_thread()
             # update the CRD status subresource
             self.set_crd_status()
@@ -172,13 +188,13 @@ class BaseCheck:
         For this to work you must have a self.check and a self._next_interval >=0 seconds
         """
         logging.info(
-            f"Starting check thread for {self._config.namespace}/{self._config.name} at interval {self._next_interval} seconds"
+            f"Starting {self} thread at interval {self._next_interval} seconds"
         )
 
         self._thread = threading.Timer(self._next_interval, self.check)
-        self._thread.setName(f"{self._config.namespace}/{self._config.name}")
+        self._thread.setName(f"{self}")
         self._thread.start()
 
-        self._status.next_check = pytz.utc.localize(
+        self.status.next_check = pytz.utc.localize(
             datetime.datetime.utcnow()
         ) + datetime.timedelta(seconds=self._next_interval)

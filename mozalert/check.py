@@ -8,12 +8,12 @@ from types import SimpleNamespace
 import datetime
 import pytz
 
-from mozalert.state import State, Status
+from mozalert.status import EnumStatus, EnumState, Status
 from mozalert.base import BaseCheck
 
 import importlib
 
-# kubernetes.client.rest.ApiException
+from kubernetes.client.rest import ApiException
 
 
 class Check(BaseCheck):
@@ -35,19 +35,21 @@ class Check(BaseCheck):
         self._config.spec = kwargs.get("spec", {})
 
     def escalate(self):
-        logging.info(f"Escalating {self._config.namespace}/{self._config.name}")
-        for esc in self._config.escalations:
-            escalation_type = esc.get("type","email")
-            args = esc.get("args",{})
-            module = importlib.import_module(f".escalations.{escalation_type}", "mozalert")
-            Escalation = getattr(module,"Escalation")
+        for esc in self.config.escalations:
+            escalation_type = esc.get("type", "email")
+            logging.info(f"Escalating {self} via {escalation_type}")
+            args = esc.get("args", {})
+            module = importlib.import_module(
+                f".escalations.{escalation_type}", "mozalert"
+            )
+            Escalation = getattr(module, "Escalation")
             e = Escalation(
-                f"{self._config.namespace}/{self._config.name}",
-                self._status.status.name,
-                attempt=self._status.attempt,
-                max_attempts=self._config.max_attempts,
-                last_check=str(self._status.last_check),
-                logs=self._status.logs,
+                f"{self}",
+                self.status.status.name,
+                attempt=self.status.attempt,
+                max_attempts=self.config.max_attempts,
+                last_check=str(self.status.last_check),
+                logs=self.status.logs,
                 args=args,
             )
             e.run()
@@ -61,64 +63,71 @@ class Check(BaseCheck):
             pod spec -> pod template -> job spec -> job
 
         """
-        logging.info(f"Running job for {self._config.namespace}/{self._config.name}")
-        pod_spec = client.V1PodSpec(**self._config.spec)
+        logging.debug(f"Running job")
+        pod_spec = client.V1PodSpec(**self.config.spec)
         template = client.V1PodTemplateSpec(
-            metadata=client.V1ObjectMeta(labels={"app": self._config.name}),
+            metadata=client.V1ObjectMeta(labels={"app": self.config.name}),
             spec=pod_spec,
         )
         job_spec = client.V1JobSpec(template=template, backoff_limit=0)
         job = client.V1Job(
             api_version="batch/v1",
             kind="Job",
-            metadata=client.V1ObjectMeta(name=self._config.name),
+            metadata=client.V1ObjectMeta(name=self.config.name),
             spec=job_spec,
         )
-        try:
-            res = self.client.create_namespaced_job(
-                body=job, namespace=self._config.namespace
-            )
-            logging.info(
-                f"Job created for {self._config.namespace}/{self._config.name}"
-            )
-        except Exception as e:
-            logging.info(sys.exc_info()[0])
-            logging.info(e)
-            raise
+        logging.debug(f"Creating job")
+        while True:
+            try:
+                res = self.client.create_namespaced_job(
+                    body=job, namespace=self.config.namespace
+                )
+                logging.debug(f"Job created")
+                break
+            except ApiException as e:
+                if e.reason == "Conflict":
+                    logging.debug(
+                        "Found another job already running. Deleting that job"
+                    )
+                    self.delete_job()
+                    sleep(3)
+                else:
+                    logging.info(e.reason)
+                    raise
 
-        self._status.state = State.RUNNING
+        self.status.state = EnumState.RUNNING
         self.set_crd_status()
 
         # wait for the job to finish
         while True:
             status = self.get_job_status()
-            if status.active and self._status.state != State.RUNNING:
-                self._status.state = State.RUNNING
-                logging.info("Setting the state to RUNNING")
+            if status.active and self.status.state != EnumState.RUNNING:
+                self.status.state = EnumState.RUNNING
             if status.start_time:
                 self._runtime = datetime.datetime.utcnow() - status.start_time.replace(
                     tzinfo=None
                 )
             if status.succeeded:
-                logging.info("Setting the job status to OK")
-                self._status.status = Status.OK
-                self._status.state = State.IDLE
+                self.status.status = EnumStatus.OK
+                self.status.state = EnumState.IDLE
             elif status.failed:
-                logging.info("Setting the job status to CRITICAL")
-                self._status.status = Status.CRITICAL
-                self._status.state = State.IDLE
+                self.status.status = EnumStatus.CRITICAL
+                self.status.state = EnumState.IDLE
 
-            if self._status.status != Status.PENDING and self._status.state != State.RUNNING:
+            if (
+                self.status.status != EnumStatus.PENDING
+                and self.status.state != EnumState.RUNNING
+            ):
                 self.get_job_logs()
-                for log_line in self._status.logs.split("\n"):
+                for log_line in self.status.logs.split("\n"):
                     logging.debug(log_line)
                 break
             sleep(self._job_poll_interval)
         logging.info(
-            f"Job finished for {self._config.namespace}/{self._config.name} in {self._runtime.seconds} seconds with status {self._status.status}"
+            f"Job finished in {self._runtime.seconds} seconds with status {self.status.status.name}"
         )
-        self._status.state = State.IDLE
-        self._status.last_check = pytz.utc.localize(datetime.datetime.utcnow())
+        self.status.state = EnumState.IDLE
+        self.status.last_check = pytz.utc.localize(datetime.datetime.utcnow())
         self.set_crd_status()
 
     def get_job_logs(self):
@@ -128,14 +137,14 @@ class Check(BaseCheck):
         the pod logs so they can be blasted into the controller logs.
         """
         res = self.pod_client.list_namespaced_pod(
-            namespace=self._config.namespace, label_selector=f"app={self._config.name}"
+            namespace=self.config.namespace, label_selector=f"app={self.config.name}"
         )
         logs = ""
         for pod in res.items:
             logs += self.pod_client.read_namespaced_pod_log(
-                pod.metadata.name, self._config.namespace
+                pod.metadata.name, self.config.namespace
             )
-        self._status.logs = logs
+        self.status.logs = logs
 
     def get_job_status(self):
         """
@@ -148,11 +157,12 @@ class Check(BaseCheck):
 
         try:
             res = self.client.read_namespaced_job_status(
-                self._config.name, self._config.namespace
+                self.config.name, self.config.namespace
             )
         except Exception as e:
             logging.info(sys.exc_info()[0])
             logging.info(e)
+            status.failed = True
             return status
 
         if res.status.active == 1:
@@ -176,18 +186,16 @@ class Check(BaseCheck):
         event, however it does, even when hitting the apiserver directly. We are careful
         to account for this but TODO to understand this further.
         """
-        logging.debug(
-            f"Setting CRD status for {self._config.namespace}/{self._config.name}"
-        )
+        logging.debug(f"Setting CRD status")
 
         status = {
             "status": {
-                "status": str(self._status.status.name),
-                "state": str(self._status.state.name),
-                "attempt": str(self._status.attempt),
-                "lastCheckTimestamp": str(self._status.last_check).split(".")[0],
-                "nextCheckTimestamp": str(self._status.next_check).split(".")[0],
-                "logs": self._status.logs,
+                "status": str(self.status.status.name),
+                "state": str(self.status.state.name),
+                "attempt": str(self.status.attempt),
+                "lastCheckTimestamp": str(self.status.last_check).split(".")[0],
+                "nextCheckTimestamp": str(self.status.next_check).split(".")[0],
+                "logs": self.status.logs,
             }
         }
 
@@ -195,9 +203,9 @@ class Check(BaseCheck):
             res = self.crd_client.patch_namespaced_custom_object_status(
                 "crd.k8s.afrank.local",
                 "v1",
-                self._config.namespace,
+                self.config.namespace,
                 "checks",
-                self._config.name,
+                self.config.name,
                 body=status,
             )
         except Exception as e:
@@ -210,13 +218,15 @@ class Check(BaseCheck):
         """
         after a check is complete delete the job which executed it
         """
+        logging.debug(f"deleting job")
         try:
             res = self.client.delete_namespaced_job(
-                self._config.name,
-                self._config.namespace,
+                self.config.name,
+                self.config.namespace,
                 propagation_policy="Foreground",
+                grace_period_seconds=0,
             )
-        except Exception as e:
+        except ApiException as e:
             # failure is probably ok here, if the job doesn't exist
             logging.debug(sys.exc_info()[0])
             logging.debug(e)

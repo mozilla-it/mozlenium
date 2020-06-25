@@ -6,7 +6,7 @@ import logging
 from mozalert.controller import Controller
 
 logging.basicConfig(
-    format="[%(asctime)s] %(name)s [%(levelname)s]: %(message)s", level=logging.INFO
+    format="%(asctime)s [%(levelname)s] %(threadName)s: %(message)s", level=logging.INFO
 )
 
 
