@@ -65,9 +65,10 @@ class Controller:
         secret_ref = kwargs.get("secret_ref", None)
         check_cm = kwargs.get("check_cm", None)
         check_url = kwargs.get("check_url", None)
+        args = kwargs.get("args",[])
         template = {
             "restart_policy": "Never",
-            "containers": [{"name": name, "image": image,}],
+            "containers": [{"name": name, "image": image }],
         }
         if secret_ref:
             template["containers"][0]["envFrom"] = [{"secretRef": {"name": secret_ref}}]
@@ -78,6 +79,8 @@ class Controller:
             template["volumes"] = [{"name": "checks", "configMap": {"name": check_cm}}]
         if check_url:
             template["containers"][0]["args"] = [check_url]
+        elif args:
+            template["containers"][0]["args"] = args
         return template
 
     @staticmethod
@@ -230,6 +233,7 @@ class Controller:
                     ).seconds,
                 }
                 max_attempts = spec.get("max_attempts", 3)
+                timeout = self.parse_time(spec.get("timeout","5m")).seconds # TODO consider parameterizing some cluster defaults
 
                 escalations = spec.get("escalations", [])
 
@@ -270,6 +274,7 @@ class Controller:
                         max_attempts=max_attempts,
                         escalations=escalations,
                         pre_status=status,
+                        timeout=timeout,
                         **self.clients,
                         **intervals,
                     )
@@ -291,6 +296,7 @@ class Controller:
                         != intervals["retry_interval"]
                         or self.threads[thread_name].config.max_attempts != max_attempts
                         or self.threads[thread_name].config.escalations != escalations
+                        or self.threads[thread_name].config.timeout != timeout
                     ):
                         logging.info(
                             f"Detected a modification to {thread_name}, restarting the thread"
@@ -304,6 +310,7 @@ class Controller:
                                 spec=pod_spec,
                                 max_attempts=max_attempts,
                                 escalations=escalations,
+                                timeout=timeout,
                                 **self.clients,
                                 **intervals,
                             )

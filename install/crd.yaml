@@ -36,6 +36,8 @@ spec:
                 x-kubernetes-int-or-string: true
               max_attempts:
                 x-kubernetes-int-or-string: true
+              timeout:
+                x-kubernetes-int-or-string: true
               escalations:
                 type: array
                 items:

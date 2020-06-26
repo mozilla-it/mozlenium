@@ -77,7 +77,10 @@ class Check(BaseCheck):
             spec=job_spec,
         )
         logging.debug(f"Creating job")
-        while True:
+        # TODO refactor this
+        tries=0
+        max_tries=100
+        while tries < max_tries:
             try:
                 res = self.client.create_namespaced_job(
                     body=job, namespace=self.config.namespace
@@ -90,10 +93,14 @@ class Check(BaseCheck):
                         "Found another job already running. Deleting that job"
                     )
                     self.delete_job()
-                    sleep(3)
+                    tries+=1
+                    sleep(self._job_poll_interval)
                 else:
                     logging.info(e.reason)
                     raise
+
+        if tries >= max_tries:
+            raise Exception(f"Max attempts to start the job ({tries}/{max_tries}) exceeded")
 
         self.status.state = EnumState.RUNNING
         self.set_crd_status()
@@ -101,27 +108,29 @@ class Check(BaseCheck):
         # wait for the job to finish
         while True:
             status = self.get_job_status()
-            if status.active and self.status.state != EnumState.RUNNING:
+            if status.active and not self.status.RUNNING:
                 self.status.state = EnumState.RUNNING
             if status.start_time:
-                self._runtime = datetime.datetime.utcnow() - status.start_time.replace(
-                    tzinfo=None
-                )
+                self._runtime = datetime.datetime.utcnow() - status.start_time.replace(tzinfo=None)
             if status.succeeded:
                 self.status.status = EnumStatus.OK
                 self.status.state = EnumState.IDLE
             elif status.failed:
                 self.status.status = EnumStatus.CRITICAL
                 self.status.state = EnumState.IDLE
-
-            if (
-                self.status.status != EnumStatus.PENDING
-                and self.status.state != EnumState.RUNNING
-            ):
+            # job is done running so get its logs
+            if not self.status.PENDING and not self.status.RUNNING:
                 self.get_job_logs()
                 for log_line in self.status.logs.split("\n"):
                     logging.debug(log_line)
                 break
+            if self.config.timeout and self._runtime.seconds > self.config.timeout:
+                logging.info("Job Timeout triggered")
+                self.status.status = EnumStatus.CRITICAL
+                self.status.state = EnumState.IDLE
+                self.status.last_check = pytz.utc.localize(datetime.datetime.utcnow())
+                self.set_crd_status()
+                raise Exception("Job Timeout")
             sleep(self._job_poll_interval)
         logging.info(
             f"Job finished in {self._runtime.seconds} seconds with status {self.status.status.name}"
@@ -160,8 +169,8 @@ class Check(BaseCheck):
                 self.config.name, self.config.namespace
             )
         except Exception as e:
-            logging.info(sys.exc_info()[0])
-            logging.info(e)
+            logging.debug(sys.exc_info()[0])
+            logging.info(e.reason)
             status.failed = True
             return status
 
@@ -211,8 +220,8 @@ class Check(BaseCheck):
         except Exception as e:
             # failed to set the status
             # TODO should take more action here
-            logging.info(sys.exc_info()[0])
-            logging.info(e)
+            logging.debug(sys.exc_info()[0])
+            logging.debug(e)
 
     def delete_job(self):
         """

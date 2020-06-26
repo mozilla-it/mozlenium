@@ -86,6 +86,7 @@ class Status:
 
     @next_check.setter
     def next_check(self, next_check):
+        logging.debug(f"Attempting to set next_check {next_check}")
         if type(next_check) == str and next_check != "None":
             try:
                 next_check = datetime.datetime.strptime(
@@ -125,3 +126,28 @@ class Status:
                 ("logs", self.logs),
             ]
         )
+
+    @property
+    def OK(self):
+        return self.status == EnumStatus.OK
+
+    @property
+    def WARN(self):
+        return self.status == EnumStatus.WARN
+
+    @property
+    def CRITICAL(self):
+        return self.status == EnumStatus.CRITICAL
+
+    @property
+    def PENDING(self):
+        return self.status == EnumStatus.PENDING
+
+    @property
+    def IDLE(self):
+        return self.state == EnumState.IDLE
+
+    @property
+    def RUNNING(self):
+        return self.state == EnumState.RUNNING
+

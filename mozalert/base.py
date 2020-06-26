@@ -43,6 +43,7 @@ class BaseCheck:
             notification_interval=float(kwargs.get("notification_interval", 0)),
             escalations=kwargs.get("escalations", []),
             max_attempts=int(kwargs.get("max_attempts", "3")),
+            timeout=float(kwargs.get("timeout",0))
         )
 
         if not self.config.retry_interval:
@@ -53,7 +54,7 @@ class BaseCheck:
         # initialize the check for the first time
         if not self._update:
             self._shutdown = False
-            self._runtime = 0
+            self._runtime = datetime.timedelta(seconds=0)
             self._thread = None
             self._escalated = False
             self._next_interval = self.config.check_interval
@@ -73,7 +74,7 @@ class BaseCheck:
                     "attempt", self.status.attempt
                 )
                 self.status.logs = self._pre_status.get("logs", self.status.logs)
-                if self.status.state == EnumState.RUNNING:
+                if self.status.RUNNING:
                     # when the pre_status was created a check was running,
                     # that check is dead to us so we need to just decrement our attempt,
                     # and reschedule the check ASAP
@@ -81,10 +82,16 @@ class BaseCheck:
                     if self.status.attempt:
                         self.status.attempt -= 1
                 elif self.status.next_check:
-                    self._next_interval = (
-                        pytz.utc.localize(self.status.next_check)
-                        - pytz.utc.localize(datetime.datetime.utcnow())
-                    ).seconds
+                    # check was not running, so set the interval based
+                    # on the original next_check
+                    next_check = pytz.utc.localize(self.status.next_check)
+                    now = pytz.utc.localize(datetime.datetime.utcnow())
+                    if now > next_check:
+                        # the check was in the process of starting 
+                        # when the controller restarted
+                        self._next_interval = 1
+                    else:
+                        self._next_interval = (next_check-now).seconds
                 self._pre_status = {}
 
             self.start_thread()
@@ -157,19 +164,20 @@ class BaseCheck:
         # run the job; this blocks until completion
         try:
             self.run_job()
-        except:
-            logging.error("Job failed to start")
+        except Exception as e:
+            logging.info(sys.exc_info()[0])
+            logging.info(e)
             self.delete_job()
         logging.info("Check finished")
         logging.debug("Cleaning up finished job")
         self.delete_job()
-        if self.status.status == EnumStatus.OK and self.escalated:
+        if self.status.OK and self.escalated:
             # recovery!
             self.escalate()
             self._escalated = False
             self.status.attempt = 0
             self._next_interval = self.config.check_interval
-        elif self.status.status == EnumStatus.OK:
+        elif self.status.OK:
             # check passed, things are great!
             self.status.attempt = 0
             self._next_interval = self.config.check_interval
