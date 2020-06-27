@@ -9,6 +9,7 @@ python = ">=3.4"
 kubernetes = "*"
 pytz = "*"
 sendgrid = "*"
+prometheus_client = "*"
 
 [tool.poetry.scripts]
 mozalert = "mozalert.main:main"

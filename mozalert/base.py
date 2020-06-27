@@ -7,7 +7,7 @@ import datetime
 import pytz
 
 from mozalert.status import EnumState, EnumStatus, Status
-
+from mozalert.metrics import MetricsQueueItem
 
 class BaseCheck:
     """
@@ -34,6 +34,7 @@ class BaseCheck:
         # from k8s and fed into the new check
         # this is removed from the object once its read
         self._pre_status = kwargs.get("pre_status", {})
+        self.metrics_queue = kwargs.get("metrics_queue",None)
 
         self._config = SimpleNamespace(
             name=kwargs.get("name"),
@@ -190,6 +191,18 @@ class BaseCheck:
         else:
             # not state OK and not enough failures to escalate
             self._next_interval = self.config.retry_interval
+
+        if self.metrics_queue:
+            self.metrics_queue.put(
+                MetricsQueueItem(
+                    "mozalert_check_runtime",
+                    name=self.config.name,
+                    namespace=self.config.namespace,
+                    status=self.status.status.name,
+                    escalated=self.escalated,
+                    value=self._runtime.seconds,
+                )
+            )
 
         # set the next_check for the CRD status
         self.status.next_check = pytz.utc.localize(

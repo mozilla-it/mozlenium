@@ -2,8 +2,11 @@ from kubernetes import client, config, watch
 import os
 import logging
 import threading
+import queue
+from time import sleep
 
 from mozalert.check import Check
+from mozalert.metrics import MetricsThread
 
 import re
 from datetime import timedelta
@@ -20,6 +23,8 @@ class Controller:
         self._version = kwargs.get("version", "v1")
         self._plural = kwargs.get("plural", "checks")
         self._check_cluster_interval = kwargs.get("check_cluster_interval", 60)
+
+        self.metrics_queue = queue.Queue()
 
         if "KUBERNETES_PORT" in os.environ:
             config.load_incluster_config()
@@ -193,6 +198,10 @@ class Controller:
 
         self.start_cluster_monitor()
 
+        self.metrics_thread = MetricsThread(q=self.metrics_queue)
+        self.metrics_thread.setName("metrics-thread")
+        self.metrics_thread.start()
+
         logging.info("Waiting for events...")
         resource_version = ""
         while True:
@@ -275,6 +284,7 @@ class Controller:
                         escalations=escalations,
                         pre_status=status,
                         timeout=timeout,
+                        metrics_queue=self.metrics_queue,
                         **self.clients,
                         **intervals,
                     )
@@ -284,6 +294,7 @@ class Controller:
                         self._threads[thread_name].shutdown()
                         # delete the check object
                         del self._threads[thread_name]
+                        logging.info("{thread_name} deleted")
                 elif operation == "MODIFIED":
                     # TODO come up with a better way to do this
                     if (
@@ -311,6 +322,7 @@ class Controller:
                                 max_attempts=max_attempts,
                                 escalations=escalations,
                                 timeout=timeout,
+                                metrics_queue=self.metrics_queue,
                                 **self.clients,
                                 **intervals,
                             )
