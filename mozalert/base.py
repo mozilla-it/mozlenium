@@ -9,6 +9,7 @@ import pytz
 from mozalert.status import EnumState, EnumStatus, Status
 from mozalert.metrics import MetricsQueueItem
 
+
 class BaseCheck:
     """
     BaseCheck implements the thread/interval logic of a check without any
@@ -34,7 +35,7 @@ class BaseCheck:
         # from k8s and fed into the new check
         # this is removed from the object once its read
         self._pre_status = kwargs.get("pre_status", {})
-        self.metrics_queue = kwargs.get("metrics_queue",None)
+        self.metrics_queue = kwargs.get("metrics_queue", None)
 
         self._config = SimpleNamespace(
             name=kwargs.get("name"),
@@ -44,7 +45,7 @@ class BaseCheck:
             notification_interval=float(kwargs.get("notification_interval", 0)),
             escalations=kwargs.get("escalations", []),
             max_attempts=int(kwargs.get("max_attempts", "3")),
-            timeout=float(kwargs.get("timeout",0))
+            timeout=float(kwargs.get("timeout", 0)),
         )
 
         if not self.config.retry_interval:
@@ -88,11 +89,11 @@ class BaseCheck:
                     next_check = pytz.utc.localize(self.status.next_check)
                     now = pytz.utc.localize(datetime.datetime.utcnow())
                     if now > next_check:
-                        # the check was in the process of starting 
+                        # the check was in the process of starting
                         # when the controller restarted
                         self._next_interval = 1
                     else:
-                        self._next_interval = (next_check-now).seconds
+                        self._next_interval = (next_check - now).seconds
                 self._pre_status = {}
 
             self.start_thread()
@@ -209,15 +210,14 @@ class BaseCheck:
             )
             self.metrics_queue.put(
                 MetricsQueueItem(
-                    f"mozalert_check_{self.status.status.name}_count",
-                    **metric_labels
+                    f"mozalert_check_{self.status.status.name}_count", **metric_labels
                 )
             )
             self.metrics_queue.put(
                 MetricsQueueItem(
                     "mozalert_check_escalations",
                     **metric_labels,
-                    value=int(self.escalated)
+                    value=int(self.escalated),
                 )
             )
 

@@ -1,4 +1,3 @@
-
 import os
 from time import sleep
 import logging
@@ -8,44 +7,53 @@ import queue
 
 from prometheus_client import CollectorRegistry, Gauge, push_to_gateway, Counter
 
+
 class MetricsQueueItem:
-    def __init__(self,key,**kwargs):
+    def __init__(self, key, **kwargs):
         self._key = key
-        self._name = kwargs.get("name",None)
-        self._namespace = kwargs.get("namespace",None)
-        self._status = kwargs.get("status",None)
-        self._escalated = kwargs.get("escalated",None)
-        self._value = kwargs.get("value",None)
+        self._name = kwargs.get("name", None)
+        self._namespace = kwargs.get("namespace", None)
+        self._status = kwargs.get("status", None)
+        self._escalated = kwargs.get("escalated", None)
+        self._value = kwargs.get("value", None)
+
     @property
     def key(self):
         return self._key
+
     @property
     def labels(self):
         return {
             "name": self.name,
             "namespace": self.namespace,
             "status": self.status,
-            "escalated": self.escalated
+            "escalated": self.escalated,
         }
 
     @property
     def name(self):
         return self._name
+
     @property
     def namespace(self):
         return self._namespace
+
     @property
     def status(self):
         return self._status
+
     @property
     def escalated(self):
         return self._escalated
+
     @property
     def value(self):
         return self._value
+
     @value.setter
-    def value(self,value):
+    def value(self, value):
         self._value = value
+
 
 class MetricsThread(threading.Thread):
     def __init__(self, q, prometheus_gateway=None):
@@ -67,28 +75,28 @@ class MetricsThread(threading.Thread):
         # all available metrics
         metrics = {
             "mozalert_check_runtime": Gauge(
-                "mozalert_check_runtime", 
-                "check runtimes", 
-                ('name','namespace','status','escalated'), 
-                registry=registry
+                "mozalert_check_runtime",
+                "check runtimes",
+                ("name", "namespace", "status", "escalated"),
+                registry=registry,
             ),
             "mozalert_check_OK_count": Counter(
                 "mozalert_check_OK_count",
                 "mozalert check OK count",
-                ('name','namespace','status','escalated'),
-                registry=registry
+                ("name", "namespace", "status", "escalated"),
+                registry=registry,
             ),
             "mozalert_check_CRITICAL_count": Counter(
                 "mozalert_check_CRITICAL_count",
                 "mozalert check CRITICAL count",
-                ('name','namespace','status','escalated'),
-                registry=registry
+                ("name", "namespace", "status", "escalated"),
+                registry=registry,
             ),
             "mozalert_check_escalations": Gauge(
                 "mozalert_check_escalations",
                 "mozalert check escalations",
-                ('name','namespace','status','escalated'),
-                registry=registry
+                ("name", "namespace", "status", "escalated"),
+                registry=registry,
             ),
         }
 
@@ -118,6 +126,7 @@ class MetricsThread(threading.Thread):
 
             if self.prometheus_gateway:
                 logging.debug("pushing metric to prometheus")
-                push_to_gateway(self.prometheus_gateway, job=__name__, registry=registry)
+                push_to_gateway(
+                    self.prometheus_gateway, job=__name__, registry=registry
+                )
             self.q.task_done()
-

@@ -78,8 +78,8 @@ class Check(BaseCheck):
         )
         logging.debug(f"Creating job")
         # TODO refactor this
-        tries=0
-        max_tries=100
+        tries = 0
+        max_tries = 100
         while tries < max_tries:
             try:
                 res = self.client.create_namespaced_job(
@@ -93,14 +93,16 @@ class Check(BaseCheck):
                         "Found another job already running. Deleting that job"
                     )
                     self.delete_job()
-                    tries+=1
+                    tries += 1
                     sleep(self._job_poll_interval)
                 else:
                     logging.info(e.reason)
                     raise
 
         if tries >= max_tries:
-            raise Exception(f"Max attempts to start the job ({tries}/{max_tries}) exceeded")
+            raise Exception(
+                f"Max attempts to start the job ({tries}/{max_tries}) exceeded"
+            )
 
         self.status.state = EnumState.RUNNING
         self.set_crd_status()
@@ -111,7 +113,9 @@ class Check(BaseCheck):
             if status.active and not self.status.RUNNING:
                 self.status.state = EnumState.RUNNING
             if status.start_time:
-                self._runtime = datetime.datetime.utcnow() - status.start_time.replace(tzinfo=None)
+                self._runtime = datetime.datetime.utcnow() - status.start_time.replace(
+                    tzinfo=None
+                )
             if status.succeeded:
                 self.status.status = EnumStatus.OK
                 self.status.state = EnumState.IDLE

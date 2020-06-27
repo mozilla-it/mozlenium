@@ -150,4 +150,3 @@ class Status:
     @property
     def RUNNING(self):
         return self.state == EnumState.RUNNING
-

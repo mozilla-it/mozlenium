@@ -70,10 +70,10 @@ class Controller:
         secret_ref = kwargs.get("secret_ref", None)
         check_cm = kwargs.get("check_cm", None)
         check_url = kwargs.get("check_url", None)
-        args = kwargs.get("args",[])
+        args = kwargs.get("args", [])
         template = {
             "restart_policy": "Never",
-            "containers": [{"name": name, "image": image }],
+            "containers": [{"name": name, "image": image}],
         }
         if secret_ref:
             template["containers"][0]["envFrom"] = [{"secretRef": {"name": secret_ref}}]
@@ -242,7 +242,9 @@ class Controller:
                     ).seconds,
                 }
                 max_attempts = spec.get("max_attempts", 3)
-                timeout = self.parse_time(spec.get("timeout","5m")).seconds # TODO consider parameterizing some cluster defaults
+                timeout = self.parse_time(
+                    spec.get("timeout", "5m")
+                ).seconds  # TODO consider parameterizing some cluster defaults
 
                 escalations = spec.get("escalations", [])
 
