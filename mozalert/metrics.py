@@ -72,6 +72,24 @@ class MetricsThread(threading.Thread):
                 ('name','namespace','status','escalated'), 
                 registry=registry
             ),
+            "mozalert_check_OK_count": Counter(
+                "mozalert_check_OK_count",
+                "mozalert check OK count",
+                ('name','namespace','status','escalated'),
+                registry=registry
+            ),
+            "mozalert_check_CRITICAL_count": Counter(
+                "mozalert_check_CRITICAL_count",
+                "mozalert check CRITICAL count",
+                ('name','namespace','status','escalated'),
+                registry=registry
+            ),
+            "mozalert_check_escalations": Gauge(
+                "mozalert_check_escalations",
+                "mozalert check escalations",
+                ('name','namespace','status','escalated'),
+                registry=registry
+            ),
         }
 
         while True:
@@ -91,7 +109,12 @@ class MetricsThread(threading.Thread):
                 self.q.task_done()
                 continue
 
-            metrics[metric.key].labels(**metric.labels).set(metric.value)
+            prom = metrics[metric.key]
+
+            if metric.value and type(prom) == Gauge:
+                prom.labels(**metric.labels).set(metric.value)
+            else:
+                prom.labels(**metric.labels).inc()
 
             if self.prometheus_gateway:
                 logging.debug("pushing metric to prometheus")

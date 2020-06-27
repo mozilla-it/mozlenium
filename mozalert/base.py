@@ -172,6 +172,13 @@ class BaseCheck:
         logging.info("Check finished")
         logging.debug("Cleaning up finished job")
         self.delete_job()
+
+        metric_labels = {
+            "name": self.config.name,
+            "namespace": self.config.namespace,
+            "status": self.status.status.name,
+            "escalated": self.escalated,
+        }
         if self.status.OK and self.escalated:
             # recovery!
             self.escalate()
@@ -196,11 +203,21 @@ class BaseCheck:
             self.metrics_queue.put(
                 MetricsQueueItem(
                     "mozalert_check_runtime",
-                    name=self.config.name,
-                    namespace=self.config.namespace,
-                    status=self.status.status.name,
-                    escalated=self.escalated,
+                    **metric_labels,
                     value=self._runtime.seconds,
+                )
+            )
+            self.metrics_queue.put(
+                MetricsQueueItem(
+                    f"mozalert_check_{self.status.status.name}_count",
+                    **metric_labels
+                )
+            )
+            self.metrics_queue.put(
+                MetricsQueueItem(
+                    "mozalert_check_escalations",
+                    **metric_labels,
+                    value=int(self.escalated)
                 )
             )
 
