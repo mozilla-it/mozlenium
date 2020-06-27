@@ -11,7 +11,7 @@ class SendGridTools:
         to_emails = kwargs.get("to_emails", [])
         from_email = kwargs.get("from_email", "afrank+sendgrid_default@mozilla.com")
         message = kwargs.get("message", "")
-        subject = kwargs.get("subject", "Error Alert from cloudalerts")
+        subject = kwargs.get("subject", "Error Alert")
         message = Mail(
             from_email=from_email,
             to_emails=to_emails,
