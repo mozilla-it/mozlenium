@@ -119,7 +119,7 @@ class MetricsThread(threading.Thread):
 
             prom = metrics[metric.key]
 
-            if metric.value and type(prom) == Gauge:
+            if metric.value is not None and type(prom) == Gauge:
                 prom.labels(**metric.labels).set(metric.value)
             else:
                 prom.labels(**metric.labels).inc()
