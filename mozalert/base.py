@@ -112,6 +112,10 @@ class BaseCheck:
         return self._thread
 
     @property
+    def shutdown(self):
+        return self._shutdown
+
+    @property
     def escalated(self):
         return self._escalated
 
@@ -140,7 +144,7 @@ class BaseCheck:
     def escalate(self):
         logging.info("Executing mock escalation")
 
-    def shutdown(self):
+    def terminate(self,join=False):
         """
         stop the thread and cleanup any leftover jobs
         """
@@ -149,12 +153,18 @@ class BaseCheck:
         if self._thread:
             try:
                 self._thread.cancel()
-                self._thread.join()
             except Exception as e:
                 logging.info(sys.exc_info()[0])
                 logging.info(e)
 
         self.delete_job()
+        
+        if join:
+            self.join()
+
+    def join(self):
+        if self._thread:
+            return self._thread.join()
 
     def check(self):
         """
@@ -225,7 +235,7 @@ class BaseCheck:
         self.status.next_check = pytz.utc.localize(
             datetime.datetime.utcnow()
         ) + datetime.timedelta(seconds=self._next_interval)
-        if not self._shutdown:
+        if not self.shutdown:
             # schedule the next run
             self.start_thread()
             # update the CRD status subresource

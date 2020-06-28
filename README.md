@@ -54,6 +54,8 @@ Available parameters:
   *OPTIONAL*: URL to check for url-based checks.
 * `template.spec`: 
   *OPTIONAL* Instead of specifying image, secret_ref and check_cm you can override everything by defining a full pod spec which will get used by the checker. You can see examples of this [here](https://github.com/mozafrank/mozalert/blob/master/examples/test-1-with-cm.yaml) and [here](https://github.com/mozafrank/mozalert/blob/master/examples/test-1-with-secret.yaml).
+* `timeout`:
+  *OPTIONAL* Max time for check to run before being killed. Default 5m.
 
 Example secret manifest for a check:
 ```

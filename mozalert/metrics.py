@@ -58,11 +58,19 @@ class MetricsQueueItem:
 class MetricsThread(threading.Thread):
     def __init__(self, q, prometheus_gateway=None):
         super().__init__()
+        self._shutdown = False
         self.q = q
         self.prometheus_gateway = prometheus_gateway
 
         if not self.prometheus_gateway:
             self.prometheus_gateway = os.environ.get("PROMETHEUS_GATEWAY", None)
+    
+    @property
+    def shutdown(self):
+        return self._shutdown
+
+    def terminate(self):
+        self._shutdown = True
 
     def run(self):
         """
@@ -100,7 +108,7 @@ class MetricsThread(threading.Thread):
             ),
         }
 
-        while True:
+        while not self.shutdown:
             try:
                 metric = self.q.get(timeout=3)
             except queue.Empty:

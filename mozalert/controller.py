@@ -4,9 +4,12 @@ import logging
 import threading
 import queue
 from time import sleep
+import sys
+import signal
 
 from mozalert.check import Check
 from mozalert.metrics import MetricsThread
+from mozalert.service import ServiceEndpoint
 
 import re
 from datetime import timedelta
@@ -23,6 +26,7 @@ class Controller:
         self._version = kwargs.get("version", "v1")
         self._plural = kwargs.get("plural", "checks")
         self._check_cluster_interval = kwargs.get("check_cluster_interval", 60)
+        self._shutdown = False
 
         self.metrics_queue = queue.Queue()
 
@@ -45,6 +49,9 @@ class Controller:
 
         self._threads = {}
 
+        signal.signal(signal.SIGINT, self.terminate)
+        signal.signal(signal.SIGTERM, self.terminate)
+
     @property
     def threads(self):
         return self._threads
@@ -64,6 +71,10 @@ class Controller:
     @property
     def plural(self):
         return self._plural
+
+    @property
+    def shutdown(self):
+        return self._shutdown
 
     @staticmethod
     def build_spec(name, image, **kwargs):
@@ -112,6 +123,21 @@ class Controller:
                 time_params[name] = int(param)
         return timedelta(**time_params)
 
+    def terminate(self, signum=-1, frame=None):
+        logging.info("Received SIGTERM. Shutting down.")
+        self._shutdown = True
+        for t in self.threads.keys():
+            self._threads[t].terminate()
+
+        self._check_thread.cancel()
+        self.metrics_thread.terminate()
+        self.service_thread.terminate()
+
+        for t in self.threads.keys():
+            self._threads[t].join()
+
+        sys.exit()
+
     def check_cluster(self):
         """
         a thread which runs periodically and provides a sanity check that things are working
@@ -142,6 +168,7 @@ class Controller:
         for tname in checks.keys():
             if tname not in self.threads:
                 logging.info(f"thread {tname} not found in self.threads")
+                continue
             check_status = checks[tname].get("status")
             thread_status = self.threads[tname].status
             if (
@@ -159,7 +186,8 @@ class Controller:
             if str(tname) not in checks:
                 logging.info(f"{tname} not found in server-side checks")
 
-        self.start_cluster_monitor()
+        if not self.shutdown:
+            self.start_cluster_monitor()
 
     def start_cluster_monitor(self):
         """
@@ -202,9 +230,13 @@ class Controller:
         self.metrics_thread.setName("metrics-thread")
         self.metrics_thread.start()
 
+        self.service_thread = ServiceEndpoint()
+        self.service_thread.setName("service-endpoint")
+        self.service_thread.start()
+
         logging.info("Waiting for events...")
         resource_version = ""
-        while True:
+        while not self.shutdown:
             stream = watch.Watch().stream(
                 self.clients["crd_client"].list_cluster_custom_object,
                 self.domain,
@@ -221,7 +253,7 @@ class Controller:
                 # and in those cases restarting the controller pod is appropriate. TODO validate
                 if operation == "ERROR":
                     logging.error("Received ERROR operation, Dying.")
-                    return 2
+                    sys.exit()
                 if operation not in ["ADDED", "MODIFIED", "DELETED"]:
                     logging.warning(
                         f"Received unexpected operation {operation}. Moving on."
@@ -262,7 +294,7 @@ class Controller:
                 # secretRef: where you store secrets to be passed to your chec
                 #            as env vars
                 # check_cm: the configMap containing the body of your check
-                pod_spec = spec.get("podSpec", {})
+                pod_spec = spec.get("template", {}).get("spec",{})
                 if not pod_spec:
                     pod_spec = self.build_spec(
                         name=name,
@@ -293,7 +325,7 @@ class Controller:
                 elif operation == "DELETED":
                     if thread_name in self._threads:
                         # stop the thread
-                        self._threads[thread_name].shutdown()
+                        self._threads[thread_name].terminate()
                         # delete the check object
                         del self._threads[thread_name]
                         logging.info("{thread_name} deleted")
@@ -315,7 +347,7 @@ class Controller:
                             f"Detected a modification to {thread_name}, restarting the thread"
                         )
                         if thread_name in self.threads:
-                            self._threads[thread_name].shutdown()
+                            self._threads[thread_name].terminate()
                             del self._threads[thread_name]
                             self._threads[thread_name] = Check(
                                 name=name,
@@ -330,3 +362,4 @@ class Controller:
                             )
                     else:
                         logging.debug("Detected a status change")
+        logging.info("Controller shut down")
