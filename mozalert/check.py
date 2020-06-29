@@ -34,25 +34,33 @@ class Check(BaseCheck):
 
         self._config.spec = kwargs.get("spec", {})
 
-    def escalate(self):
+    def escalate(self, recovery=False):
+        self.escalated = not recovery
         for esc in self.config.escalations:
             escalation_type = esc.get("type", "email")
             logging.info(f"Escalating {self} via {escalation_type}")
             args = esc.get("args", {})
-            module = importlib.import_module(
-                f".escalations.{escalation_type}", "mozalert"
-            )
-            Escalation = getattr(module, "Escalation")
-            e = Escalation(
-                f"{self}",
-                self.status.status.name,
-                attempt=self.status.attempt,
-                max_attempts=self.config.max_attempts,
-                last_check=str(self.status.last_check),
-                logs=self.status.logs,
-                args=args,
-            )
-            e.run()
+            try:
+                module = importlib.import_module(
+                    f".escalations.{escalation_type}", "mozalert"
+                )
+                Escalation = getattr(module, "Escalation")
+                e = Escalation(
+                    f"{self}",
+                    self.status.status.name,
+                    attempt=self.status.attempt,
+                    max_attempts=self.config.max_attempts,
+                    last_check=str(self.status.last_check),
+                    logs=self.status.logs,
+                    args=args,
+                )
+                e.run()
+            except Exception as e:
+                logging.error(
+                    f"Failed to send escalation type {escalation_type} for {self}"
+                )
+                logging.error(sys.exc_info()[0])
+                logging.error(e)
 
     def run_job(self):
         """
@@ -149,9 +157,17 @@ class Check(BaseCheck):
         to have a way to save the logs before deleting it. this retrieves
         the pod logs so they can be blasted into the controller logs.
         """
-        res = self.pod_client.list_namespaced_pod(
-            namespace=self.config.namespace, label_selector=f"app={self.config.name}"
-        )
+        try:
+            res = self.pod_client.list_namespaced_pod(
+                namespace=self.config.namespace,
+                label_selector=f"app={self.config.name}",
+            )
+        except Exception as e:
+            logging.debug(sys.exc_info()[0])
+            logging.debug(e)
+            self.status.logs = ""
+            return
+
         logs = ""
         for pod in res.items:
             logs += self.pod_client.read_namespaced_pod_log(

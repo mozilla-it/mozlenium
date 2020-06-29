@@ -135,6 +135,35 @@ status:
   status: OK
 ```
 
+## Checkers
+
+Mozalert comes with a few checkers which are easy to use out of the box:
+
+* `afrank/pinger`: Simply test if a public endpoint is available. The main argument in the spec is `check_url`. This uses wget to perform the request.
+* `afrank/mozlenium`: Using New Relic style nodejs selenium test syntax this runs a synthetics check with [Firefox Nightly](https://wiki.mozilla.org/Nightly).
+* `afrank/mozlenium-esr`: This is a version of mozlenium which uses [Firefox-esr](https://packages.debian.org/stable/firefox-esr) from Debian stable instead of nightly.
+* `afrank/mozlenium-chrome`: For those who must, a version of mozlenium with google chrome is also provided.
+
+### Using a custom checker
+
+Using your own checker is easy. Just implement a docker container which performs some check and exits with either a failure status (2) or success status (0). [The Pinger](https://github.com/mozafrank/mozalert/tree/master/checkers/pinger) is a very simple example of how this works. To pass arguments to your custom checker's entrypoint, place them in order in your check manifest, in the `spec.args` list. For example:
+
+```
+apiVersion: crd.k8s.afrank.local/v1
+kind: Check
+metadata:
+  name: check-test-1
+  namespace: default
+spec:
+  check_interval: 1m
+  image: my/custom-check-image
+  args:
+  - arg1
+  - arg2
+  - arg3
+
+```
+
 ## How to Develop
 
 The entire stack is meant to run in Kubernetes but for development can be run locally or via docker.

@@ -64,7 +64,7 @@ class MetricsThread(threading.Thread):
 
         if not self.prometheus_gateway:
             self.prometheus_gateway = os.environ.get("PROMETHEUS_GATEWAY", None)
-    
+
     @property
     def shutdown(self):
         return self._shutdown

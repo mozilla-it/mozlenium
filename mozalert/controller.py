@@ -294,7 +294,7 @@ class Controller:
                 # secretRef: where you store secrets to be passed to your chec
                 #            as env vars
                 # check_cm: the configMap containing the body of your check
-                pod_spec = spec.get("template", {}).get("spec",{})
+                pod_spec = spec.get("template", {}).get("spec", {})
                 if not pod_spec:
                     pod_spec = self.build_spec(
                         name=name,
