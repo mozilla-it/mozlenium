@@ -19,7 +19,7 @@ fi
 
 export NODE_PATH=/app/node_modules
 
-export PATH=${PATH}:${NODE_PATH}/geckodriver/bin:/app/firefox
+export PATH=${PATH}:${NODE_PATH}/geckodriver/bin
 
 #geckodriver -V
 #firefox --version

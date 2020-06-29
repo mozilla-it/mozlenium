@@ -19,11 +19,6 @@ fi
 
 export NODE_PATH=/app/node_modules
 
-export PATH=${PATH}:${NODE_PATH}/geckodriver/bin:/app/firefox
-
-#geckodriver -V
-#firefox --version
-
 start=$(date +%s)
 node --abort-on-uncaught-exception --unhandled-rejections=strict $f $*
 res=$?

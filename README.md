@@ -7,7 +7,7 @@ mozalert is a monitoring tool written in python which runs as a Kubernetes Custo
 ```
 git clone https://github.com/mozafrank/mozalert
 cd mozalert/install
-for f in clusterrole.yaml clusterrolebinding.yaml crd.yaml deploy.yaml; do
+for f in clusterrole.yaml clusterrolebinding.yaml crd.yaml stateful.yaml; do
     kubectl apply -f $f
 done
 ```

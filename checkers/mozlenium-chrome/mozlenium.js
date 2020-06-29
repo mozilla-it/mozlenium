@@ -1,22 +1,19 @@
 
 var $driver = require('selenium-webdriver');
 
-const firefox = require('selenium-webdriver/firefox');
+const chrome = require('selenium-webdriver/chrome');
 
 const _ = require('lodash');
 
-var options = new firefox.Options();
+var chromeCapabilities = $driver.Capabilities.chrome();
 
-options.addArguments("-headless");
-options.addArguments("--window-size=1024,768");
-options.addArguments("--disable-gpu");
-options.addArguments("--test-type");
-options.addArguments("--no-sandbox");
-options.addArguments("--disable-dev-shm-usage");
+chromeCapabilities.set('chromeOptions',{
+    'args': ['--headless', 'window-size=1024,768', '--disable-gpu', '--test-type', '--no-sandbox', '--disable-dev-shm-usage']
+});
 
 var $browser = new $driver.Builder()
-    .forBrowser('firefox')
-    .setFirefoxOptions(options)
+    .forBrowser('chrome')
+    .withCapabilities(chromeCapabilities)
     .build();
 
 var $secure = {}
