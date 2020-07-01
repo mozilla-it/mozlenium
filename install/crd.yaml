@@ -56,9 +56,9 @@ spec:
             properties:
               attempt:
                 x-kubernetes-int-or-string: true
-              nextCheckTimestamp:
+              next_check:
                 type: string
-              lastCheckTimestamp:
+              last_check:
                 type: string
               state:
                 type: string
@@ -86,11 +86,11 @@ spec:
     - name: Last_Check
       type: string
       description: Last Check
-      jsonPath: .status.lastCheckTimestamp
+      jsonPath: .status.last_check
     - name: Next_Check
       type: string
       description: Next Check
-      jsonPath: .status.nextCheckTimestamp
+      jsonPath: .status.next_check
     - name: Age
       type: date
       jsonPath: .metadata.creationTimestamp

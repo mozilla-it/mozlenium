@@ -26,6 +26,8 @@ class ServiceEndpoint(threading.Thread):
         self._shutdown = False
         self.server = ThreadingHTTPServer((host, port), Router)
 
+        self.setName("service-endpoint")
+
     @property
     def shutdown(self):
         return self._shutdown

@@ -32,8 +32,6 @@ class Check(BaseCheck):
 
         super().__init__(**kwargs)
 
-        self._config.spec = kwargs.get("spec", {})
-
     def escalate(self, recovery=False):
         self.escalated = not recovery
         for esc in self.config.escalations:
@@ -72,7 +70,7 @@ class Check(BaseCheck):
 
         """
         logging.debug(f"Running job")
-        pod_spec = client.V1PodSpec(**self.config.spec)
+        pod_spec = client.V1PodSpec(**self.config.pod_spec)
         template = client.V1PodTemplateSpec(
             metadata=client.V1ObjectMeta(labels={"app": self.config.name}),
             spec=pod_spec,
@@ -217,17 +215,6 @@ class Check(BaseCheck):
         """
         logging.debug(f"Setting CRD status")
 
-        status = {
-            "status": {
-                "status": str(self.status.status.name),
-                "state": str(self.status.state.name),
-                "attempt": str(self.status.attempt),
-                "lastCheckTimestamp": str(self.status.last_check).split(".")[0],
-                "nextCheckTimestamp": str(self.status.next_check).split(".")[0],
-                "logs": self.status.logs,
-            }
-        }
-
         try:
             res = self.crd_client.patch_namespaced_custom_object_status(
                 "crd.k8s.afrank.local",
@@ -235,7 +222,7 @@ class Check(BaseCheck):
                 self.config.namespace,
                 "checks",
                 self.config.name,
-                body=status,
+                body=self.status.crd_status,
             )
         except Exception as e:
             # failed to set the status

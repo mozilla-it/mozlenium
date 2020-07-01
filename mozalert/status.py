@@ -150,3 +150,41 @@ class Status:
     @property
     def RUNNING(self):
         return self.state == EnumState.RUNNING
+
+    @property
+    def crd_status(self):
+        # TODO combine with __iter__
+        return {
+            "status": {
+                "status": str(self.status.name),
+                "state": str(self.state.name),
+                "attempt": str(self.attempt),
+                "last_check": str(self.last_check).split(".")[0],
+                "next_check": str(self.next_check).split(".")[0],
+                "logs": self.logs,
+            }
+        }
+
+    @property
+    def next_interval(self):
+        if not self.next_check:
+            return 0
+        next_check = pytz.utc.localize(self.next_check)
+        now = pytz.utc.localize(datetime.datetime.utcnow())
+        if now > next_check:
+            return 1
+        else:
+            return (next_check - now).seconds
+
+    def parse_pre_status(self,**kwargs):
+        self.status = kwargs.get("status", self.status)
+        self.state = kwargs.get("state", self.state)
+        self.last_check = kwargs.get("last_check", self.last_check)
+        self.next_check = kwargs.get("next_check", self.next_check)
+        self.attempt = kwargs.get("attempt", self.attempt)
+        self.logs = kwargs.get("logs", self.logs)
+        if self.RUNNING and self.attempt:
+            # pre_status was running with an attempt >0 so decrement the attempt
+            # since we will retry anyhow
+            self.attempt -= 1
+

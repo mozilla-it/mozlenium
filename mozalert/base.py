@@ -6,9 +6,9 @@ from types import SimpleNamespace
 import datetime
 import pytz
 
-from mozalert.status import EnumState, EnumStatus, Status
+from mozalert.status import Status
 from mozalert.metrics import MetricsQueueItem
-
+from mozalert.checkconfig import CheckConfig
 
 class BaseCheck:
     """
@@ -36,59 +36,23 @@ class BaseCheck:
         self._pre_status = kwargs.get("pre_status", {})
         self.metrics_queue = kwargs.get("metrics_queue", None)
 
-        self.config = SimpleNamespace(
-            name=kwargs.get("name"),
-            namespace=kwargs.get("namespace"),
-            check_interval=float(kwargs.get("check_interval")),
-            retry_interval=float(kwargs.get("retry_interval", 0)),
-            notification_interval=float(kwargs.get("notification_interval", 0)),
-            escalations=kwargs.get("escalations", []),
-            max_attempts=int(kwargs.get("max_attempts", "3")),
-            timeout=float(kwargs.get("timeout", 0)),
-        )
-
-        if not self.config.retry_interval:
-            self.config.retry_interval = self.config.check_interval
-        if not self.config.notification_interval:
-            self.config.notification_interval = self.config.check_interval
-
+        _config = kwargs.get("config",None)
+        if _config:
+            self.config = _config
+        else:
+            self.config = CheckConfig(**kwargs)
+        
         self.shutdown = False
         self._runtime = datetime.timedelta(seconds=0)
         self._thread = None
         self.escalated = False
         self._next_interval = self.config.check_interval
 
-        self._status = Status(status=EnumStatus.PENDING, state=EnumState.IDLE)
+        self._status = Status()
 
         if self._pre_status:
-            self.status.status = self._pre_status.get("status", self.status.status)
-            self.status.state = self._pre_status.get("state", self.status.state)
-            self.status.last_check = self._pre_status.get(
-                "lastCheckTimestamp", self.status.last_check
-            )
-            self.status.next_check = self._pre_status.get(
-                "nextCheckTimestamp", self.status.next_check
-            )
-            self.status.attempt = self._pre_status.get("attempt", self.status.attempt)
-            self.status.logs = self._pre_status.get("logs", self.status.logs)
-            if self.status.RUNNING:
-                # when the pre_status was created a check was running,
-                # that check is dead to us so we need to just decrement our attempt,
-                # and reschedule the check ASAP
-                self._next_interval = 1
-                if self.status.attempt:
-                    self.status.attempt -= 1
-            elif self.status.next_check:
-                # check was not running, so set the interval based
-                # on the original next_check
-                next_check = pytz.utc.localize(self.status.next_check)
-                now = pytz.utc.localize(datetime.datetime.utcnow())
-                if now > next_check:
-                    # the check was in the process of starting
-                    # when the controller restarted
-                    self._next_interval = 1
-                else:
-                    self._next_interval = (next_check - now).seconds
+            self._status.parse_pre_status(**self._pre_status)
+            self._next_interval = self.status.next_interval
             self._pre_status = {}
 
         self.start_thread()
@@ -157,7 +121,7 @@ class BaseCheck:
         stop the thread and cleanup any leftover jobs
         """
         self.shutdown = True
-        logging.debug("Stopping check thread")
+        logging.info("Terminating check thread")
         if self._thread:
             try:
                 self._thread.cancel()
@@ -187,12 +151,10 @@ class BaseCheck:
         except Exception as e:
             logging.info(sys.exc_info()[0])
             logging.info(e)
-            self.delete_job()
-        logging.info("Check finished")
-        logging.debug("Cleaning up finished job")
+
         self.delete_job()
 
-        __labels = {
+        __labels__ = {
             "name": self.config.name,
             "namespace": self.config.namespace,
             "status": self.status.status.name,
@@ -219,17 +181,17 @@ class BaseCheck:
         if self.metrics_queue:
             self.metrics_queue.put(
                 MetricsQueueItem(
-                    "mozalert_check_runtime", **__labels, value=self._runtime.seconds,
+                    "mozalert_check_runtime", **__labels__, value=self._runtime.seconds,
                 )
             )
             self.metrics_queue.put(
                 MetricsQueueItem(
-                    f"mozalert_check_{self.status.status.name}_count", **__labels
+                    f"mozalert_check_{self.status.status.name}_count", **__labels__
                 )
             )
             self.metrics_queue.put(
                 MetricsQueueItem(
-                    "mozalert_check_escalations", **__labels, value=int(self.escalated),
+                    "mozalert_check_escalations", **__labels__, value=int(self.escalated),
                 )
             )
 
