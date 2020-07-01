@@ -10,6 +10,7 @@ from mozalert.status import Status
 from mozalert.metrics import MetricsQueueItem
 from mozalert.checkconfig import CheckConfig
 
+
 class BaseCheck:
     """
     BaseCheck implements the thread/interval logic of a check without any
@@ -36,12 +37,12 @@ class BaseCheck:
         self._pre_status = kwargs.get("pre_status", {})
         self.metrics_queue = kwargs.get("metrics_queue", None)
 
-        _config = kwargs.get("config",None)
+        _config = kwargs.get("config", None)
         if _config:
             self.config = _config
         else:
             self.config = CheckConfig(**kwargs)
-        
+
         self.shutdown = False
         self._runtime = datetime.timedelta(seconds=0)
         self._thread = None
@@ -121,7 +122,7 @@ class BaseCheck:
         stop the thread and cleanup any leftover jobs
         """
         self.shutdown = True
-        logging.info("Terminating check thread")
+        logging.info("Terminating {self}")
         if self._thread:
             try:
                 self._thread.cancel()
@@ -191,7 +192,9 @@ class BaseCheck:
             )
             self.metrics_queue.put(
                 MetricsQueueItem(
-                    "mozalert_check_escalations", **__labels__, value=int(self.escalated),
+                    "mozalert_check_escalations",
+                    **__labels__,
+                    value=int(self.escalated),
                 )
             )
 

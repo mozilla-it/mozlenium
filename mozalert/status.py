@@ -176,7 +176,7 @@ class Status:
         else:
             return (next_check - now).seconds
 
-    def parse_pre_status(self,**kwargs):
+    def parse_pre_status(self, **kwargs):
         self.status = kwargs.get("status", self.status)
         self.state = kwargs.get("state", self.state)
         self.last_check = kwargs.get("last_check", self.last_check)
@@ -187,4 +187,3 @@ class Status:
             # pre_status was running with an attempt >0 so decrement the attempt
             # since we will retry anyhow
             self.attempt -= 1
-

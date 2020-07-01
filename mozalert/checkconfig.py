@@ -1,4 +1,5 @@
-import logging 
+import logging
+
 
 class CheckConfig:
     """
@@ -8,19 +9,20 @@ class CheckConfig:
     to the config of the running thread, and if there are differences it'll
     start a new thread.
     """
-    def __init__(self,**kwargs):
-        self._name=kwargs.get("name")
-        self._namespace=kwargs.get("namespace")
-        
-        self._check_interval=float(kwargs.get("check_interval"))
 
-        self._retry_interval=float(kwargs.get("retry_interval", 0))
-        self._notification_interval=float(kwargs.get("notification_interval", 0))
-        self._escalations=kwargs.get("escalations", [])
-        self._max_attempts=int(kwargs.get("max_attempts", "3"))
-        self._timeout=float(kwargs.get("timeout", 0))
-        
-        self.pod_spec = kwargs.get("pod_spec",{})
+    def __init__(self, **kwargs):
+        self._name = kwargs.get("name")
+        self._namespace = kwargs.get("namespace")
+
+        self._check_interval = float(kwargs.get("check_interval"))
+
+        self._retry_interval = float(kwargs.get("retry_interval", 0))
+        self._notification_interval = float(kwargs.get("notification_interval", 0))
+        self._escalations = kwargs.get("escalations", [])
+        self._max_attempts = int(kwargs.get("max_attempts", "3"))
+        self._timeout = float(kwargs.get("timeout", 0))
+
+        self.pod_spec = kwargs.get("pod_spec", {})
 
         if not self.retry_interval:
             self._retry_interval = self.check_interval
@@ -35,27 +37,27 @@ class CheckConfig:
     @property
     def namespace(self):
         return self._namespace
-    
+
     @property
     def check_interval(self):
         return self._check_interval
-    
+
     @property
     def retry_interval(self):
         return self._retry_interval
-    
+
     @property
     def notification_interval(self):
         return self._notification_interval
-    
+
     @property
     def escalations(self):
         return self._escalations
-    
+
     @property
     def max_attempts(self):
         return self._max_attempts
-    
+
     @property
     def timeout(self):
         return self._timeout
@@ -65,21 +67,23 @@ class CheckConfig:
         return self._pod_spec
 
     @pod_spec.setter
-    def pod_spec(self,pod_spec):
+    def pod_spec(self, pod_spec):
         self._pod_spec = pod_spec
 
     def __iter__(self):
-        return iter([
-            ("name",self.name),
-            ("namespace",self.namespace),
-            ("check_interval",self.check_interval),
-            ("retry_interval",self.retry_interval),
-            ("notification_interval",self.notification_interval),
-            ("escalations",self.escalations),
-            ("max_attempts",self.max_attempts),
-            ("timeout",self.timeout),
-            ("pod_spec",self.pod_spec),
-        ])
+        return iter(
+            [
+                ("name", self.name),
+                ("namespace", self.namespace),
+                ("check_interval", self.check_interval),
+                ("retry_interval", self.retry_interval),
+                ("notification_interval", self.notification_interval),
+                ("escalations", self.escalations),
+                ("max_attempts", self.max_attempts),
+                ("timeout", self.timeout),
+                ("pod_spec", self.pod_spec),
+            ]
+        )
 
     def build_pod_spec(self, **kwargs):
         """
@@ -93,7 +97,7 @@ class CheckConfig:
         template = {
             "restart_policy": "Never",
             "containers": [{"name": self.name, "image": image}],
-        }   
+        }
         if secret_ref:
             template["containers"][0]["envFrom"] = [{"secretRef": {"name": secret_ref}}]
         if check_cm:
@@ -106,5 +110,5 @@ class CheckConfig:
             template["containers"][0]["args"] = [check_url]
         elif args:
             template["containers"][0]["args"] = args
-        
+
         self.pod_spec = template

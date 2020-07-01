@@ -1,4 +1,3 @@
-
 import threading
 import logging
 from time import sleep
@@ -7,15 +6,16 @@ from mozalert.event import Event
 import pytz
 import datetime
 
+
 class CheckMonitor(threading.Thread):
-    def __init__(self,**kwargs):
+    def __init__(self, **kwargs):
         super().__init__()
         self.crd_client = kwargs.get("crd_client")
         self.domain = kwargs.get("domain")
         self.version = kwargs.get("version")
         self.plural = kwargs.get("plural")
-        
-        self.interval = kwargs.get("interval",60)
+
+        self.interval = kwargs.get("interval", 60)
 
         self._shutdown = False
 
@@ -60,22 +60,29 @@ class CheckMonitor(threading.Thread):
             )
         except Exception as e:
             logging.error(e)
-            check_list = { "items": [] }
+            check_list = {"items": []}
 
         for obj in check_list.get("items"):
-            event = Event(type="ADD",object=obj)
+            event = Event(type="ADD", object=obj)
             status = Status(**event.status)
             now = pytz.utc.localize(datetime.datetime.utcnow())
             name = str(event)
 
             # do some sanity checks
-            if ( not status.next_check or pytz.utc.localize(status.next_check) + datetime.timedelta(seconds=30) < now ) and not status.RUNNING:
+            if (
+                not status.next_check
+                or pytz.utc.localize(status.next_check) + datetime.timedelta(seconds=30)
+                < now
+            ) and not status.RUNNING:
                 failed += 1
-                logging.warning("Sanity check failed: {name} next_check is in the past but status is not RUNNING")
+                logging.warning(
+                    "Sanity check failed: {name} next_check is in the past but status is not RUNNING"
+                )
             else:
                 success += 1
 
-        logging.debug(f"sanity check finished with {success} success and {failed} failures")
+        logging.debug(
+            f"sanity check finished with {success} success and {failed} failures"
+        )
 
         logging.info("Cluster Monitor finished")
-

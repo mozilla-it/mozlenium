@@ -1,4 +1,3 @@
-
 from enum import Enum
 from types import SimpleNamespace
 import re
@@ -6,15 +5,18 @@ from datetime import timedelta
 
 from mozalert.checkconfig import CheckConfig
 
+
 class EventType(Enum):
     """
     These are the operations our controller supports
     """
+
     ADDED = 0
     MODIFIED = 1
     DELETED = 2
     ERROR = 3
     BADEVENT = 4
+
 
 class Event:
     """
@@ -25,27 +27,34 @@ class Event:
 
     and in our case the k8s object is a Check object.
     """
-    def __init__(self,**kwargs):
-        self._type = kwargs.get("type","BADEVENT")
 
-        self._obj = kwargs.get("object",{})
-        self._check_spec = self._obj.get("spec",{})
-        self._status = self._obj.get("status",{})
-        self._metadata = self._obj.get("metadata",{})
+    def __init__(self, **kwargs):
+        self._type = kwargs.get("type", "BADEVENT")
+
+        self._obj = kwargs.get("object", {})
+        self._check_spec = self._obj.get("spec", {})
+        self._status = self._obj.get("status", {})
+        self._metadata = self._obj.get("metadata", {})
 
         self._resource_version = self._metadata.get("resourceVersion")
-        self._image = self._check_spec.get("image",None)
+        self._image = self._check_spec.get("image", None)
 
         self.config = CheckConfig(
-            name = self._metadata.get("name"),
-            namespace = self._metadata.get("namespace"),
-            check_interval = self.parse_time(self._check_spec.get("check_interval")).seconds,
-            retry_interval = self.parse_time(self._check_spec.get("retry_interval")).seconds,
-            notification_interval = self.parse_time(self._check_spec.get("notification_interval")).seconds,
-            escalations = self._check_spec.get("escalations",[]),
-            max_attempts = self._check_spec.get("max_attempts",3),
-            timeout = self.parse_time(self._check_spec.get("timeout","5m")).seconds,
-            pod_spec = self._check_spec.get("template", {}).get("spec", {}),
+            name=self._metadata.get("name"),
+            namespace=self._metadata.get("namespace"),
+            check_interval=self.parse_time(
+                self._check_spec.get("check_interval")
+            ).seconds,
+            retry_interval=self.parse_time(
+                self._check_spec.get("retry_interval")
+            ).seconds,
+            notification_interval=self.parse_time(
+                self._check_spec.get("notification_interval")
+            ).seconds,
+            escalations=self._check_spec.get("escalations", []),
+            max_attempts=self._check_spec.get("max_attempts", 3),
+            timeout=self.parse_time(self._check_spec.get("timeout", "5m")).seconds,
+            pod_spec=self._check_spec.get("template", {}).get("spec", {}),
         )
 
         if not self.config.pod_spec:
@@ -57,9 +66,9 @@ class Event:
 
     @property
     def type(self):
-        if self._type not in [ x.name for x in EventType ]:
+        if self._type not in [x.name for x in EventType]:
             return EventType.BADEVENT
-        return getattr(EventType,self._type)
+        return getattr(EventType, self._type)
 
     @property
     def resource_version(self):
@@ -100,7 +109,7 @@ class Event:
         return self._config
 
     @config.setter
-    def config(self,config):
+    def config(self, config):
         self._config = config
 
     def __repr__(self):
@@ -136,4 +145,3 @@ class Event:
             if param:
                 time_params[name] = int(param)
         return timedelta(**time_params)
-

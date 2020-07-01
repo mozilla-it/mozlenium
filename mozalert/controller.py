@@ -16,6 +16,7 @@ from mozalert.checkmonitor import CheckMonitor
 import re
 from datetime import timedelta
 
+
 class Controller:
     """
     the Controller runs the main thread which tails the event stream for objects in our CRD. It
@@ -26,7 +27,7 @@ class Controller:
         self.domain = kwargs.get("domain", "crd.k8s.afrank.local")
         self.version = kwargs.get("version", "v1")
         self.plural = kwargs.get("plural", "checks")
-        
+
         self._check_monitor_interval = kwargs.get("check_monitor_interval", 60)
         self._shutdown = False
 
@@ -84,14 +85,13 @@ class Controller:
             "crd_client": client.CustomObjectsApi(self._api_client),
         }
 
-    def kill_check(self,check_name):
+    def kill_check(self, check_name):
         if check_name not in self.checks:
             logging.warning(f"{check_name} not found in checks`")
             return
-        
+
         self._checks[check_name].terminate()
         del self._checks[check_name]
-
 
     def run(self):
         """
@@ -119,7 +119,7 @@ class Controller:
             domain=self.domain,
             version=self.version,
             plural=self.plural,
-            interval=self._check_monitor_interval
+            interval=self._check_monitor_interval,
         )
         self.check_monitor_thread.start()
 
@@ -150,14 +150,12 @@ class Controller:
                 if event.ERROR:
                     logging.error("Received ERROR operation, Dying.")
                     sys.exit()
-                
+
                 if event.BADEVENT:
                     logging.warning(f"Received unexpected {event.type}. Moving on.")
                     continue
 
-                logging.debug(
-                    f"{event.type} operation detected for thread {event}"
-                )
+                logging.debug(f"{event.type} operation detected for thread {event}")
 
                 check_name = str(event)
                 resource_version = event.resource_version
@@ -171,10 +169,10 @@ class Controller:
                         metrics_queue=self.metrics_queue,
                         pre_status=event.status,
                     )
-                
+
                 if event.DELETED:
                     self.kill_check(check_name)
-                
+
                 if event.MODIFIED:
                     # a MODIFIED event could either be a config change or a status
                     # change, so we need to detect which it is
@@ -185,7 +183,7 @@ class Controller:
                     logging.info(f"Detected a config change to {event}")
 
                     self.kill_check(check_name)
-                    
+
                     self._checks[check_name] = Check(
                         **self.clients,
                         config=event.config,
