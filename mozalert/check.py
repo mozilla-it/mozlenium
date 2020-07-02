@@ -1,6 +1,5 @@
 import os
 import sys
-from kubernetes import client, config, watch
 import logging
 from time import sleep
 
@@ -8,15 +7,15 @@ from types import SimpleNamespace
 import datetime
 import pytz
 
-from mozalert.status import EnumStatus, EnumState, Status
-from mozalert.base import BaseCheck
+from mozalert import base, status
+from mozalert.utils.dt import now
 
 import importlib
 
-from kubernetes.client.rest import ApiException
+from mozalert.kubeclient import ApiException
 
 
-class Check(BaseCheck):
+class Check(base.BaseCheck):
     """
     the Check object handles the entire lifecycle of a check:
     * maintains the check interval using threading.Timer (BaseCheck)
@@ -26,9 +25,7 @@ class Check(BaseCheck):
     """
 
     def __init__(self, **kwargs):
-        self.client = kwargs.get("client", client.BatchV1Api())
-        self.pod_client = kwargs.get("pod_client", client.CoreV1Api())
-        self.crd_client = kwargs.get("crd_client", client.CustomObjectsApi())
+        self.kube = kwargs.get("kube")
 
         super().__init__(**kwargs)
 
@@ -70,64 +67,39 @@ class Check(BaseCheck):
 
         """
         logging.debug(f"Running job")
-        pod_spec = client.V1PodSpec(**self.config.pod_spec)
-        template = client.V1PodTemplateSpec(
-            metadata=client.V1ObjectMeta(labels={"app": self.config.name}),
-            spec=pod_spec,
-        )
-        job_spec = client.V1JobSpec(template=template, backoff_limit=0)
-        job = client.V1Job(
-            api_version="batch/v1",
-            kind="Job",
-            metadata=client.V1ObjectMeta(name=self.config.name),
-            spec=job_spec,
-        )
+
+        job = self.kube.make_job(self.config.name, **self.config.pod_spec)
+
         logging.debug(f"Creating job")
-        # TODO refactor this
-        tries = 0
-        max_tries = 100
-        while tries < max_tries:
-            try:
-                res = self.client.create_namespaced_job(
-                    body=job, namespace=self.config.namespace
-                )
-                logging.debug(f"Job created")
-                break
-            except ApiException as e:
-                if e.reason == "Conflict":
-                    logging.debug(
-                        "Found another job already running. Deleting that job"
-                    )
-                    self.delete_job()
-                    tries += 1
-                    sleep(self._job_poll_interval)
-                else:
-                    logging.info(e.reason)
-                    raise
 
-        if tries >= max_tries:
-            raise Exception(
-                f"Max attempts to start the job ({tries}/{max_tries}) exceeded"
+        try:
+            res = self.kube.BatchV1Api.create_namespaced_job(
+                body=job, namespace=self.config.namespace
             )
+            logging.debug(f"Job created")
+        except ApiException as e:
+            logging.debug(e)
+            logging.debug(sys.exc_info()[0])
+            if e.reason != "Conflict":
+                raise
 
-        self.status.state = EnumState.RUNNING
+        self.status.state = status.EnumState.RUNNING
         self.set_crd_status()
 
-        # wait for the job to finish
+        # wait for the job to start then finish
+        # TODO refactor this
         while True:
-            status = self.get_job_status()
-            if status.active and not self.status.RUNNING:
-                self.status.state = EnumState.RUNNING
-            if status.start_time:
-                self._runtime = datetime.datetime.utcnow() - status.start_time.replace(
-                    tzinfo=None
-                )
-            if status.succeeded:
-                self.status.status = EnumStatus.OK
-                self.status.state = EnumState.IDLE
-            elif status.failed:
-                self.status.status = EnumStatus.CRITICAL
-                self.status.state = EnumState.IDLE
+            st = self.get_job_status()
+            if st.active and not self.status.RUNNING:
+                self.status.state = status.EnumState.RUNNING
+            if st.start_time:
+                self._runtime = now() - st.start_time
+            if st.succeeded:
+                self.status.status = status.EnumStatus.OK
+                self.status.state = status.EnumState.IDLE
+            elif st.failed:
+                self.status.status = status.EnumStatus.CRITICAL
+                self.status.state = status.EnumState.IDLE
             # job is done running so get its logs
             if not self.status.PENDING and not self.status.RUNNING:
                 self.get_job_logs()
@@ -136,17 +108,17 @@ class Check(BaseCheck):
                 break
             if self.config.timeout and self._runtime.seconds > self.config.timeout:
                 logging.info("Job Timeout triggered")
-                self.status.status = EnumStatus.CRITICAL
-                self.status.state = EnumState.IDLE
-                self.status.last_check = pytz.utc.localize(datetime.datetime.utcnow())
+                self.status.status = status.EnumStatus.CRITICAL
+                self.status.state = status.EnumState.IDLE
+                self.status.last_check = now()
                 self.set_crd_status()
                 raise Exception("Job Timeout")
             sleep(self._job_poll_interval)
         logging.info(
             f"Job finished in {self._runtime.seconds} seconds with status {self.status.status.name}"
         )
-        self.status.state = EnumState.IDLE
-        self.status.last_check = pytz.utc.localize(datetime.datetime.utcnow())
+        self.status.state = status.EnumState.IDLE
+        self.status.last_check = now()
         self.set_crd_status()
 
     def get_job_logs(self):
@@ -156,7 +128,7 @@ class Check(BaseCheck):
         the pod logs so they can be blasted into the controller logs.
         """
         try:
-            res = self.pod_client.list_namespaced_pod(
+            res = self.kube.CoreV1Api.list_namespaced_pod(
                 namespace=self.config.namespace,
                 label_selector=f"app={self.config.name}",
             )
@@ -168,7 +140,7 @@ class Check(BaseCheck):
 
         logs = ""
         for pod in res.items:
-            logs += self.pod_client.read_namespaced_pod_log(
+            logs += self.kube.CoreV1Api.read_namespaced_pod_log(
                 pod.metadata.name, self.config.namespace
             )
         self.status.logs = logs
@@ -183,7 +155,7 @@ class Check(BaseCheck):
         )
 
         try:
-            res = self.client.read_namespaced_job_status(
+            res = self.kube.BatchV1Api.read_namespaced_job_status(
                 self.config.name, self.config.namespace
             )
         except Exception as e:
@@ -216,7 +188,7 @@ class Check(BaseCheck):
         logging.debug(f"Setting CRD status")
 
         try:
-            res = self.crd_client.patch_namespaced_custom_object_status(
+            res = self.kube.CustomObjectsApi.patch_namespaced_custom_object_status(
                 "crd.k8s.afrank.local",
                 "v1",
                 self.config.namespace,
@@ -236,13 +208,13 @@ class Check(BaseCheck):
         """
         logging.debug(f"deleting job")
         try:
-            res = self.client.delete_namespaced_job(
+            res = self.kube.BatchV1Api.delete_namespaced_job(
                 self.config.name,
                 self.config.namespace,
                 propagation_policy="Foreground",
                 grace_period_seconds=0,
             )
-        except ApiException as e:
+        except Exception as e:
             # failure is probably ok here, if the job doesn't exist
             logging.debug(sys.exc_info()[0])
             logging.debug(e)

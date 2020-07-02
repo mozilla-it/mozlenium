@@ -1,44 +1,44 @@
-from kubernetes import client, config, watch
 import os
 import logging
 import threading
 import queue
 from time import sleep
 import sys
-import signal
 
-from mozalert.check import Check
-from mozalert.metrics import MetricsThread
-from mozalert.service import ServiceEndpoint
-from mozalert.event import Event
-from mozalert.checkmonitor import CheckMonitor
+from mozalert import kubeclient, check, metrics, event, checkmonitor
 
 import re
 from datetime import timedelta
 
 
-class Controller:
+class Controller(threading.Thread):
     """
     the Controller runs the main thread which tails the event stream for objects in our CRD. It
     manages check threads and ensures they run when/how they're supposed to.
     """
 
     def __init__(self, **kwargs):
+        super().__init__()
+
         self.domain = kwargs.get("domain", "crd.k8s.afrank.local")
         self.version = kwargs.get("version", "v1")
         self.plural = kwargs.get("plural", "checks")
 
+        self.shutdown = kwargs.get("shutdown", lambda: False)
+
+        self.metrics_thread_shutdown = False
+        self.check_monitor_thread_shutdown = False
         self._check_monitor_interval = kwargs.get("check_monitor_interval", 60)
-        self._shutdown = False
+
+        self.watch = None
 
         self.metrics_queue = queue.Queue()
 
-        self.setup_client()
+        self.kube = kubeclient.KubeClient()
 
         self._checks = {}
 
-        signal.signal(signal.SIGINT, self.terminate)
-        signal.signal(signal.SIGTERM, self.terminate)
+        self.setName("controller-thread")
 
     @property
     def checks(self):
@@ -48,42 +48,18 @@ class Controller:
     def clients(self):
         return self._clients
 
-    @property
-    def shutdown(self):
-        return self._shutdown
-
     def terminate(self, signum=-1, frame=None):
-        logging.info("Received SIGTERM. Shutting down.")
-        self._shutdown = True
+        logging.info("Received SIGTERM request. Shutting down controller.")
+
         for c in self.checks.keys():
             self._checks[c].terminate()
 
-        self.check_monitor_thread.terminate()
-        self.metrics_thread.terminate()
-        self.service_thread.terminate()
+        self.check_monitor_thread_shutdown = True
+        self.metrics_thread_shutdown = True
 
         for c in self.checks.keys():
-            self._checks[c].join()
-
-        sys.exit()
-
-    def setup_client(self):
-        if "KUBERNETES_PORT" in os.environ:
-            config.load_incluster_config()
-        else:
-            config.load_kube_config()
-
-        self._client_config = client.Configuration()
-        self._client_config.assert_hostname = False
-
-        self._api_client = client.api_client.ApiClient(
-            configuration=self._client_config
-        )
-        self._clients = {
-            "client": client.BatchV1Api(),
-            "pod_client": client.CoreV1Api(),
-            "crd_client": client.CustomObjectsApi(self._api_client),
-        }
+            self._checks[c].thread.join()
+        logging.info("finished joining checks")
 
     def kill_check(self, check_name):
         if check_name not in self.checks:
@@ -114,79 +90,80 @@ class Controller:
 
         """
 
-        self.check_monitor_thread = CheckMonitor(
-            crd_client=self.clients["crd_client"],
+        self.check_monitor_thread = checkmonitor.CheckMonitor(
+            kube=self.kube,
             domain=self.domain,
             version=self.version,
             plural=self.plural,
             interval=self._check_monitor_interval,
+            shutdown=lambda: self.check_monitor_thread_shutdown,
         )
         self.check_monitor_thread.start()
 
-        self.metrics_thread = MetricsThread(q=self.metrics_queue)
+        self.metrics_thread = metrics.MetricsThread(
+            q=self.metrics_queue, shutdown=lambda: self.metrics_thread_shutdown
+        )
         self.metrics_thread.start()
-
-        self.service_thread = ServiceEndpoint()
-        self.service_thread.start()
 
         logging.info("Waiting for events...")
         resource_version = ""
-        while not self.shutdown:
-            stream = watch.Watch().stream(
-                self.clients["crd_client"].list_cluster_custom_object,
+        while not self.shutdown():
+            self.watch = self.kube.Watch()
+            stream = self.watch.stream(
+                self.kube.CustomObjectsApi.list_cluster_custom_object,
                 self.domain,
                 self.version,
                 self.plural,
                 resource_version=resource_version,
+                timeout_seconds=5,  # TODO parameterize this timeout
             )
             for crd_event in stream:
-
-                event = Event(**crd_event)
+                evt = event.Event(**crd_event)
 
                 # restart the controller if ERROR operation is detected.
                 # dying is harsh but in theory states should be preserved in the k8s object.
                 # I've only seen the ERROR state when applying changes to the CRD definition
                 # and in those cases restarting the controller pod is appropriate. TODO validate
-                if event.ERROR:
+                if evt.ERROR:
                     logging.error("Received ERROR operation, Dying.")
-                    sys.exit()
+                    return
 
-                if event.BADEVENT:
-                    logging.warning(f"Received unexpected {event.type}. Moving on.")
+                if evt.BADEVENT:
+                    logging.warning(f"Received unexpected {evt.type}. Moving on.")
                     continue
 
-                logging.debug(f"{event.type} operation detected for thread {event}")
+                logging.debug(f"{evt.type} operation detected for thread {evt}")
 
-                check_name = str(event)
-                resource_version = event.resource_version
+                check_name = str(evt)
+                resource_version = evt.resource_version
 
-                if event.ADDED:
+                if evt.ADDED:
                     # create a new check and read any
                     # found status back into the check
-                    self._checks[check_name] = Check(
-                        **self.clients,
-                        config=event.config,
+                    self._checks[check_name] = check.Check(
+                        kube=self.kube,
+                        config=evt.config,
                         metrics_queue=self.metrics_queue,
-                        pre_status=event.status,
+                        pre_status=evt.status,
                     )
 
-                if event.DELETED:
+                if evt.DELETED:
                     self.kill_check(check_name)
 
-                if event.MODIFIED:
+                if evt.MODIFIED:
                     # a MODIFIED event could either be a config change or a status
                     # change, so we need to detect which it is
-                    if dict(self.checks[check_name].config) == dict(event.config):
+                    if dict(self.checks[check_name].config) == dict(evt.config):
                         logging.debug("Detected a status change")
                         continue
 
-                    logging.info(f"Detected a config change to {event}")
+                    logging.info(f"Detected a config change to {evt}")
 
                     self.kill_check(check_name)
 
-                    self._checks[check_name] = Check(
-                        **self.clients,
-                        config=event.config,
+                    self._checks[check_name] = check.Check(
+                        kube=self.kube,
+                        config=evt.config,
                         metrics_queue=self.metrics_queue,
                     )
 

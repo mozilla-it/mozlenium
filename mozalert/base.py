@@ -6,9 +6,8 @@ from types import SimpleNamespace
 import datetime
 import pytz
 
-from mozalert.status import Status
-from mozalert.metrics import MetricsQueueItem
-from mozalert.checkconfig import CheckConfig
+from mozalert import status, metrics, checkconfig
+from mozalert.utils.dt import now
 
 
 class BaseCheck:
@@ -41,7 +40,7 @@ class BaseCheck:
         if _config:
             self.config = _config
         else:
-            self.config = CheckConfig(**kwargs)
+            self.config = checkconfig.CheckConfig(**kwargs)
 
         self.shutdown = False
         self._runtime = datetime.timedelta(seconds=0)
@@ -49,7 +48,7 @@ class BaseCheck:
         self.escalated = False
         self._next_interval = self.config.check_interval
 
-        self._status = Status()
+        self._status = status.Status()
 
         if self._pre_status:
             self._status.parse_pre_status(**self._pre_status)
@@ -78,6 +77,10 @@ class BaseCheck:
     @property
     def escalated(self):
         return self._escalated
+
+    @property
+    def next_interval(self):
+        return self._next_interval
 
     @escalated.setter
     def escalated(self, escalated):
@@ -122,7 +125,7 @@ class BaseCheck:
         stop the thread and cleanup any leftover jobs
         """
         self.shutdown = True
-        logging.info("Terminating {self}")
+        logging.info(f"Terminating {self}")
         if self._thread:
             try:
                 self._thread.cancel()
@@ -133,11 +136,7 @@ class BaseCheck:
         self.delete_job()
 
         if join:
-            self.join()
-
-    def join(self):
-        if self._thread:
-            return self._thread.join()
+            self._thread.join()
 
     def check(self):
         """
@@ -181,17 +180,17 @@ class BaseCheck:
 
         if self.metrics_queue:
             self.metrics_queue.put(
-                MetricsQueueItem(
+                metrics.MetricsQueueItem(
                     "mozalert_check_runtime", **__labels__, value=self._runtime.seconds,
                 )
             )
             self.metrics_queue.put(
-                MetricsQueueItem(
+                metrics.MetricsQueueItem(
                     f"mozalert_check_{self.status.status.name}_count", **__labels__
                 )
             )
             self.metrics_queue.put(
-                MetricsQueueItem(
+                metrics.MetricsQueueItem(
                     "mozalert_check_escalations",
                     **__labels__,
                     value=int(self.escalated),
@@ -199,9 +198,7 @@ class BaseCheck:
             )
 
         # set the next_check for the CRD status
-        self.status.next_check = pytz.utc.localize(
-            datetime.datetime.utcnow()
-        ) + datetime.timedelta(seconds=self._next_interval)
+        self.status.next_check = now() + datetime.timedelta(seconds=self.next_interval)
 
         if not self.shutdown:
             # schedule the next run
@@ -215,14 +212,10 @@ class BaseCheck:
 
         For this to work you must have a self.check and a self._next_interval >=0 seconds
         """
-        logging.info(
-            f"Starting {self} thread at interval {self._next_interval} seconds"
-        )
+        logging.info(f"Starting {self} at interval {self.next_interval} seconds")
 
-        self._thread = threading.Timer(self._next_interval, self.check)
+        self._thread = threading.Timer(self.next_interval, self.check)
         self._thread.setName(f"{self}")
         self._thread.start()
 
-        self.status.next_check = pytz.utc.localize(
-            datetime.datetime.utcnow()
-        ) + datetime.timedelta(seconds=self._next_interval)
+        self.status.next_check = now() + datetime.timedelta(seconds=self.next_interval)

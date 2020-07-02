@@ -2,6 +2,8 @@
 
 import sys
 import logging
+import signal
+from time import sleep
 
 from mozalert.controller import Controller
 
@@ -10,8 +12,26 @@ logging.basicConfig(
 )
 
 
+class MainThread:
+    def __init__(self):
+        signal.signal(signal.SIGINT, self.terminate)
+        signal.signal(signal.SIGTERM, self.terminate)
+
+        self.shutdown = False
+
+        self.controller = Controller(shutdown=lambda: self.shutdown)
+        self.controller.start()
+
+    def terminate(self, signum=-1, frame=None):
+        self.shutdown = True
+        self.controller.terminate()
+
+    def run(self):
+        return self.controller.join()
+
+
 def main():
-    sys.exit(Controller().run())
+    return MainThread().run()
 
 
 if __name__ == "__main__":

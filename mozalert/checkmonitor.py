@@ -3,6 +3,7 @@ import logging
 from time import sleep
 from mozalert.status import Status
 from mozalert.event import Event
+from mozalert.utils.dt import now
 import pytz
 import datetime
 
@@ -10,28 +11,32 @@ import datetime
 class CheckMonitor(threading.Thread):
     def __init__(self, **kwargs):
         super().__init__()
-        self.crd_client = kwargs.get("crd_client")
+        self.kube = kwargs.get("kube")
         self.domain = kwargs.get("domain")
         self.version = kwargs.get("version")
         self.plural = kwargs.get("plural")
 
         self.interval = kwargs.get("interval", 60)
 
-        self._shutdown = False
+        self.shutdown = kwargs.get("shutdown", lambda: False)
 
         self.setName("check-monitor")
 
-    @property
-    def shutdown(self):
-        return self._shutdown
-
     def terminate(self):
-        self._shutdown = True
+        return self.join()
 
     def run(self):
-        while not self.shutdown:
-            sleep(self.interval)
+        t = 1
+        while not self.shutdown():
+            tsleep = 0
+            while tsleep < self.interval:
+                sleep(t)
+                tsleep += t
+                if self.shutdown():
+                    logging.info("Received SIGTERM, shutting down.")
+                    return
             self.check_monitor()
+        logging.info("Received SIGTERM, shutting down.")
 
     def check_monitor(self):
         """
@@ -51,11 +56,11 @@ class CheckMonitor(threading.Thread):
         success = 0
         failed = 0
 
-        logging.info("Running Cluster Monitor")
+        logging.info("Running Check Monitor")
 
         checks = {}
         try:
-            check_list = self.crd_client.list_cluster_custom_object(
+            check_list = self.kube.CustomObjectsApi.list_cluster_custom_object(
                 self.domain, self.version, self.plural, watch=False
             )
         except Exception as e:
@@ -65,18 +70,17 @@ class CheckMonitor(threading.Thread):
         for obj in check_list.get("items"):
             event = Event(type="ADD", object=obj)
             status = Status(**event.status)
-            now = pytz.utc.localize(datetime.datetime.utcnow())
             name = str(event)
 
             # do some sanity checks
             if (
                 not status.next_check
                 or pytz.utc.localize(status.next_check) + datetime.timedelta(seconds=30)
-                < now
+                < now()
             ) and not status.RUNNING:
                 failed += 1
                 logging.warning(
-                    "Sanity check failed: {name} next_check is in the past but status is not RUNNING"
+                    f"Sanity check failed: {name} next_check is in the past but status is not RUNNING"
                 )
             else:
                 success += 1
@@ -85,4 +89,4 @@ class CheckMonitor(threading.Thread):
             f"sanity check finished with {success} success and {failed} failures"
         )
 
-        logging.info("Cluster Monitor finished")
+        logging.info("Check Monitor finished")

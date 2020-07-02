@@ -3,6 +3,8 @@ import datetime
 import pytz
 import logging
 
+from mozalert.utils.dt import now
+
 
 class EnumStatus(Enum):
     """
@@ -87,7 +89,7 @@ class Status:
     @next_check.setter
     def next_check(self, next_check):
         logging.debug(f"Attempting to set next_check {next_check}")
-        if type(next_check) == str and next_check != "None":
+        if next_check and type(next_check) == str and next_check != "None":
             try:
                 next_check = datetime.datetime.strptime(
                     next_check, "%Y-%m-%d %H:%M:%S%z"
@@ -170,11 +172,10 @@ class Status:
         if not self.next_check:
             return 0
         next_check = pytz.utc.localize(self.next_check)
-        now = pytz.utc.localize(datetime.datetime.utcnow())
-        if now > next_check:
+        if now() > next_check:
             return 1
         else:
-            return (next_check - now).seconds
+            return (next_check - now()).seconds
 
     def parse_pre_status(self, **kwargs):
         self.status = kwargs.get("status", self.status)
