@@ -164,6 +164,35 @@ spec:
 
 ```
 
+### Checker Telemetry
+
+Mozalert supports sending basic telemetry back from the checker and forwarding to the metrics subsystem. The supported metrics are:
+
+* `total_time`: Total time of request (ms)
+* `latency`: Time (ms) for the response to start.
+
+The mozlenium and pinger checkers included in mozalert support these metrics. If you want to add them to a custom checker, send these lines (for example) to STDOUT of the check:
+```
+TELEMETRY: total_time 1234
+TELEMETRY: latency 1234
+```
+For example, if I wanted to use `total_time` in a bash check, I could do:
+```
+#!/bin/bash
+
+stime=$(date +%s%3N)
+echo doing some checking
+my_check()
+etime=$(date +%s%3N)
+
+((total_time=etime-stime))
+
+echo Check finished
+echo TELEMETRY: total_time $total_time
+exit 0
+```
+And note these "TELEMETRY" lines are parsed by mozalert and filtered out of your log output, so you won't see them in the status subresource of your check object.
+
 ## How to Develop
 
 The entire stack is meant to run in Kubernetes but for development can be run locally or via docker.

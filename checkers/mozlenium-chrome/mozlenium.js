@@ -21,6 +21,21 @@ _.each(process.env, (val,key) => {
     $secure[key] = val;
 });
 
+$browser.unmeasuredGet = $browser.get;
+
+$browser.get = function(url, timeoutMsOpt) {
+        var metrics = [];
+        return $browser.unmeasuredGet(url, timeoutMsOpt).then(function () {
+                metrics.push($browser.executeScript("return window.performance.timing.navigationStart"));
+                metrics.push($browser.executeScript("return window.performance.timing.responseStart"));
+                metrics.push($browser.executeScript("return window.performance.timing.domComplete"));
+                return Promise.all(metrics).then(function (metrics) {
+                        console.log("TELEMETRY: total_time", metrics[2] - metrics[0]);
+                        console.log("TELEMETRY: latency", metrics[1] - metrics[0]);
+                });
+        });
+};
+
 $browser.waitForElement = function (locatorOrElement, timeoutMsOpt) {
         return $browser.wait($driver.until.elementLocated(locatorOrElement), timeoutMsOpt || 1000, 'Timed-out waiting for element to be located using: ' + locatorOrElement);
 };
@@ -37,5 +52,5 @@ module.exports = function() {
 	this.$browser = $browser;
 	this.$driver = $driver;
 	this.$secure = $secure;
-}
+};
 

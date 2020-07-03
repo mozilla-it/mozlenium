@@ -104,6 +104,18 @@ class MetricsThread(threading.Thread):
                 ("name", "namespace", "status", "escalated"),
                 registry=registry,
             ),
+            "mozalert_check_total_time": Gauge(
+                "mozalert_check_total_time",
+                "mozalert check total time",
+                ("name", "namespace", "status", "escalated"),
+                registry=registry,
+            ),
+            "mozalert_check_latency": Gauge(
+                "mozalert_check_latency",
+                "mozalert check latency",
+                ("name", "namespace", "status", "escalated"),
+                registry=registry,
+            ),
         }
 
         while not self.shutdown():

@@ -9,6 +9,8 @@ import pytz
 from mozalert import status, metrics, checkconfig
 from mozalert.utils.dt import now
 
+import re
+
 
 class BaseCheck:
     """
@@ -47,6 +49,8 @@ class BaseCheck:
         self._thread = None
         self.escalated = False
         self._next_interval = self.config.check_interval
+
+        self.telemetry = {}
 
         self._status = status.Status()
 
@@ -119,6 +123,28 @@ class BaseCheck:
     def escalate(self, recovery=False):
         self.escalated = not recovery
         logging.info("Executing mock escalation")
+
+    @staticmethod
+    def extract_telemetry_from_logs(logs):
+        """
+        we support some basic telemetry in log responses from checks. 
+        this allows one to pass telemetry back to the controller
+        without needing to implement additional clients.
+        """
+        _logs = ""
+        _telemetry = {}
+        for line in logs.split("\n"):
+            pattern = re.compile(r"TELEMETRY:\s*(?P<key>\w+)\s*(?P<val>\d+)[^0-9]?")
+            match = pattern.match(line)
+            if not match:
+                _logs += line + "\n"
+                continue
+            m = match.groupdict()
+            key = m.get("key")
+            val = m.get("val")
+            _telemetry[key] = val
+
+        return _logs, _telemetry
 
     def terminate(self, join=False):
         """
@@ -196,6 +222,24 @@ class BaseCheck:
                     value=int(self.escalated),
                 )
             )
+
+            if self.telemetry.get("total_time"):
+                self.metrics_queue.put(
+                    metrics.MetricsQueueItem(
+                        "mozalert_check_total_time",
+                        **__labels__,
+                        value=float(self.telemetry.get("total_time"))
+                    )
+                )
+
+            if self.telemetry.get("latency"):
+                self.metrics_queue.put(
+                    metrics.MetricsQueueItem(
+                        "mozalert_check_latency",
+                        **__labels__,
+                        value=float(self.telemetry.get("latency"))
+                    )
+                )
 
         # set the next_check for the CRD status
         self.status.next_check = now() + datetime.timedelta(seconds=self.next_interval)

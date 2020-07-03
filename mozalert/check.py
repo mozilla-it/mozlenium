@@ -143,6 +143,10 @@ class Check(base.BaseCheck):
             logs += self.kube.CoreV1Api.read_namespaced_pod_log(
                 pod.metadata.name, self.config.namespace
             )
+        logs, telemetry = self.extract_telemetry_from_logs(logs)
+        if telemetry:
+            logging.debug(f"Found telemetry: {telemetry}")
+            self.telemetry = telemetry
         self.status.logs = logs
 
     def get_job_status(self):
