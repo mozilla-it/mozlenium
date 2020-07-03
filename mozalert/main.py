@@ -3,7 +3,6 @@
 import sys
 import logging
 import signal
-from time import sleep
 
 from mozalert.controller import Controller
 

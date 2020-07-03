@@ -4,7 +4,6 @@ import threading
 
 from types import SimpleNamespace
 import datetime
-import pytz
 
 from mozalert import status, metrics, checkconfig
 from mozalert.utils.dt import now
@@ -31,7 +30,6 @@ class BaseCheck:
         initialize a check
         """
 
-        self._job_poll_interval = float(kwargs.get("job_poll_interval", 3))
         # if the process is restarted the status is re-read
         # from k8s and fed into the new check
         # this is removed from the object once its read
@@ -159,12 +157,10 @@ class BaseCheck:
                 logging.info(sys.exc_info()[0])
                 logging.info(e)
 
-        self.delete_job()
-
         if join:
             self._thread.join()
 
-    def check(self):
+    def check(self, shutdown=lambda: False):
         """
         main thread for creating then watching a check job; this is called as
         the Timer thread target.
@@ -173,7 +169,7 @@ class BaseCheck:
         logging.info(f"Starting check attempt {self.status.attempt}")
         # run the job; this blocks until completion
         try:
-            self.run_job()
+            self.run_job(shutdown)
         except Exception as e:
             logging.info(sys.exc_info()[0])
             logging.info(e)
@@ -228,7 +224,7 @@ class BaseCheck:
                     metrics.MetricsQueueItem(
                         "mozalert_check_total_time",
                         **__labels__,
-                        value=float(self.telemetry.get("total_time"))
+                        value=float(self.telemetry.get("total_time")),
                     )
                 )
 
@@ -237,14 +233,14 @@ class BaseCheck:
                     metrics.MetricsQueueItem(
                         "mozalert_check_latency",
                         **__labels__,
-                        value=float(self.telemetry.get("latency"))
+                        value=float(self.telemetry.get("latency")),
                     )
                 )
 
         # set the next_check for the CRD status
         self.status.next_check = now() + datetime.timedelta(seconds=self.next_interval)
 
-        if not self.shutdown:
+        if not shutdown():
             # schedule the next run
             self.start_thread()
             # update the CRD status subresource
@@ -258,7 +254,9 @@ class BaseCheck:
         """
         logging.info(f"Starting {self} at interval {self.next_interval} seconds")
 
-        self._thread = threading.Timer(self.next_interval, self.check)
+        self._thread = threading.Timer(
+            self.next_interval, self.check, kwargs={"shutdown": lambda: self.shutdown}
+        )
         self._thread.setName(f"{self}")
         self._thread.start()
 

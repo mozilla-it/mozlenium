@@ -1,11 +1,8 @@
-import os
 import sys
 import logging
 from time import sleep
 
 from types import SimpleNamespace
-import datetime
-import pytz
 
 from mozalert import base, status
 from mozalert.utils.dt import now
@@ -13,6 +10,8 @@ from mozalert.utils.dt import now
 import importlib
 
 from mozalert.kubeclient import ApiException
+
+from datetime import timedelta
 
 
 class Check(base.BaseCheck):
@@ -26,6 +25,8 @@ class Check(base.BaseCheck):
 
     def __init__(self, **kwargs):
         self.kube = kwargs.get("kube")
+        self._job_poll_interval = float(kwargs.get("job_poll_interval", 3))
+        self._shutdown_max_wait_sec = float(kwargs.get("shutdown_max_wait_sec", 10))
 
         super().__init__(**kwargs)
 
@@ -57,7 +58,7 @@ class Check(base.BaseCheck):
                 logging.error(sys.exc_info()[0])
                 logging.error(e)
 
-    def run_job(self):
+    def run_job(self, shutdown=lambda: False):
         """
         Build the k8s resources, apply them, then poll for completion, and
         report status back to the thread.
@@ -70,8 +71,6 @@ class Check(base.BaseCheck):
 
         job = self.kube.make_job(self.config.name, **self.config.pod_spec)
 
-        logging.debug(f"Creating job")
-
         try:
             res = self.kube.BatchV1Api.create_namespaced_job(
                 body=job, namespace=self.config.namespace
@@ -80,40 +79,52 @@ class Check(base.BaseCheck):
         except ApiException as e:
             logging.debug(e)
             logging.debug(sys.exc_info()[0])
+            # if the job is already there we just
+            # move on.
             if e.reason != "Conflict":
                 raise
 
         self.status.state = status.EnumState.RUNNING
         self.set_crd_status()
 
-        # wait for the job to start then finish
-        # TODO refactor this
+        # wait for the job to finish
+        shutdown_timer = 0
         while True:
+            sleep(self._job_poll_interval)
             st = self.get_job_status()
-            if st.active and not self.status.RUNNING:
-                self.status.state = status.EnumState.RUNNING
+
+            if shutdown():
+                shutdown_timer += self._job_poll_interval
+
             if st.start_time:
                 self._runtime = now() - st.start_time
+            else:
+                self._runtime += timedelta(seconds=self._job_poll_interval)
+
             if st.succeeded:
                 self.status.status = status.EnumStatus.OK
                 self.status.state = status.EnumState.IDLE
             elif st.failed:
                 self.status.status = status.EnumStatus.CRITICAL
                 self.status.state = status.EnumState.IDLE
+
             # job is done running so get its logs
             if not self.status.PENDING and not self.status.RUNNING:
                 self.get_job_logs()
                 for log_line in self.status.logs.split("\n"):
                     logging.debug(log_line)
                 break
-            if self.config.timeout and self._runtime.seconds > self.config.timeout:
+
+            if (
+                self.config.timeout and self._runtime.seconds > self.config.timeout
+            ) or shutdown_timer >= self._shutdown_max_wait_sec:
                 logging.info("Job Timeout triggered")
                 self.status.status = status.EnumStatus.CRITICAL
                 self.status.state = status.EnumState.IDLE
                 self.status.last_check = now()
                 self.set_crd_status()
                 raise Exception("Job Timeout")
-            sleep(self._job_poll_interval)
+
         logging.info(
             f"Job finished in {self._runtime.seconds} seconds with status {self.status.status.name}"
         )

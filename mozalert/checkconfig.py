@@ -1,6 +1,3 @@
-import logging
-
-
 class CheckConfig:
     """
     the CheckConfig is used by Check objects as well as Event objects.

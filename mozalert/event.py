@@ -1,5 +1,4 @@
 from enum import Enum
-from types import SimpleNamespace
 import re
 from datetime import timedelta
 

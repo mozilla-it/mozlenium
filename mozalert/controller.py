@@ -1,14 +1,8 @@
-import os
 import logging
 import threading
 import queue
-from time import sleep
-import sys
 
 from mozalert import kubeclient, check, metrics, event, checkmonitor
-
-import re
-from datetime import timedelta
 
 
 class Controller(threading.Thread):
@@ -48,7 +42,7 @@ class Controller(threading.Thread):
     def clients(self):
         return self._clients
 
-    def terminate(self, signum=-1, frame=None):
+    def terminate(self):
         logging.info("Received SIGTERM request. Shutting down controller.")
 
         for c in self.checks.keys():
