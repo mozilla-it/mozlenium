@@ -4,7 +4,7 @@ from time import sleep
 
 from types import SimpleNamespace
 
-from mozalert import base, status
+from mozalert import base, status, metrics
 from mozalert.utils.dt import now
 
 import importlib
@@ -14,7 +14,7 @@ from mozalert.kubeclient import ApiException
 from datetime import timedelta
 
 
-class Check(base.BaseCheck):
+class Check(base.BaseCheck, metrics.mixin.MetricsMixin):
     """
     the Check object handles the entire lifecycle of a check:
     * maintains the check interval using threading.Timer (BaseCheck)
@@ -108,26 +108,22 @@ class Check(base.BaseCheck):
                 self.status.status = status.EnumStatus.CRITICAL
                 self.status.state = status.EnumState.IDLE
 
-            # job is done running so get its logs
-            if not self.status.PENDING and not self.status.RUNNING:
-                self.get_job_logs()
-                for log_line in self.status.logs.split("\n"):
-                    logging.debug(log_line)
-                break
-
             if (
                 self.config.timeout and self._runtime.seconds > self.config.timeout
             ) or shutdown_timer >= self._shutdown_max_wait_sec:
-                logging.info("Job Timeout triggered")
-                self.status.status = status.EnumStatus.CRITICAL
+                logging.error("Job Timeout triggered")
                 self.status.state = status.EnumState.IDLE
-                self.status.last_check = now()
-                self.set_crd_status()
-                raise Exception("Job Timeout")
+                self.status.status = status.EnumStatus.CRITICAL
+
+            if not self.status.PENDING and not self.status.RUNNING:
+                break
 
         logging.info(
             f"Job finished in {self._runtime.seconds} seconds with status {self.status.status.name}"
         )
+
+        self.get_job_logs()
+
         self.status.state = status.EnumState.IDLE
         self.status.last_check = now()
         self.set_crd_status()
@@ -157,7 +153,7 @@ class Check(base.BaseCheck):
         logs, telemetry = self.extract_telemetry_from_logs(logs)
         if telemetry:
             logging.debug(f"Found telemetry: {telemetry}")
-            self.telemetry = telemetry
+            self.status.telemetry = telemetry
         self.status.logs = logs
 
     def get_job_status(self):
@@ -233,3 +229,4 @@ class Check(base.BaseCheck):
             # failure is probably ok here, if the job doesn't exist
             logging.debug(sys.exc_info()[0])
             logging.debug(e)
+

@@ -41,6 +41,7 @@ class Status:
         self.next_check = kwargs.get("next_check", None)
         self.attempt = kwargs.get("attempt", 0)
         self.logs = kwargs.get("logs", "")
+        self.telemetry = kwargs.get("telemetry", {})
 
     @property
     def status(self):
@@ -63,6 +64,14 @@ class Status:
             state = getattr(EnumState, state)
         logging.debug(f"setting state to {state.name}")
         self._state = state
+
+    @property
+    def telemetry(self):
+        return self._telemetry
+
+    @telemetry.setter
+    def telemetry(self, telemetry):
+        self._telemetry = telemetry
 
     @property
     def last_check(self):
@@ -126,6 +135,7 @@ class Status:
                 ("next_check", self.next_check),
                 ("attempt", self.attempt),
                 ("logs", self.logs),
+                ("telemetry", self.telemetry),
             ]
         )
 
@@ -164,6 +174,7 @@ class Status:
                 "last_check": str(self.last_check).split(".")[0],
                 "next_check": str(self.next_check).split(".")[0],
                 "logs": self.logs,
+                "telemetry": self.telemetry,
             }
         }
 
@@ -184,6 +195,7 @@ class Status:
         self.next_check = kwargs.get("next_check", self.next_check)
         self.attempt = kwargs.get("attempt", self.attempt)
         self.logs = kwargs.get("logs", self.logs)
+        self.telemetry = kwargs.get("telemetry", self.telemetry)
         if self.RUNNING and self.attempt:
             # pre_status was running with an attempt >0 so decrement the attempt
             # since we will retry anyhow

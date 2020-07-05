@@ -8,9 +8,6 @@ import datetime
 from mozalert import status, metrics, checkconfig
 from mozalert.utils.dt import now
 
-import re
-
-
 class BaseCheck:
     """
     BaseCheck implements the thread/interval logic of a check without any
@@ -30,11 +27,12 @@ class BaseCheck:
         initialize a check
         """
 
+        super().__init__(**kwargs)
+
         # if the process is restarted the status is re-read
         # from k8s and fed into the new check
         # this is removed from the object once its read
         self._pre_status = kwargs.get("pre_status", {})
-        self.metrics_queue = kwargs.get("metrics_queue", None)
 
         _config = kwargs.get("config", None)
         if _config:
@@ -47,8 +45,6 @@ class BaseCheck:
         self._thread = None
         self.escalated = False
         self._next_interval = self.config.check_interval
-
-        self.telemetry = {}
 
         self._status = status.Status()
 
@@ -99,51 +95,6 @@ class BaseCheck:
     def __repr__(self):
         return f"{self.config.namespace}/{self.config.name}"
 
-    def run_job(self):
-        logging.info("Executing mock run_job")
-
-    def set_crd_status(self):
-        logging.info("Executing mock set_crd_status")
-
-    def get_job_status(self):
-        logging.info("Executing mock set_status")
-        return SimpleNamespace(
-            active=False, succeeded=False, failed=False, start_time=None
-        )
-
-    def get_job_logs(self):
-        logging.info("Executing mock get_job_logs")
-        return ""
-
-    def delete_job(self):
-        logging.info("Executing mock delete_job")
-
-    def escalate(self, recovery=False):
-        self.escalated = not recovery
-        logging.info("Executing mock escalation")
-
-    @staticmethod
-    def extract_telemetry_from_logs(logs):
-        """
-        we support some basic telemetry in log responses from checks. 
-        this allows one to pass telemetry back to the controller
-        without needing to implement additional clients.
-        """
-        _logs = ""
-        _telemetry = {}
-        for line in logs.split("\n"):
-            pattern = re.compile(r"TELEMETRY:\s*(?P<key>\w+)\s*(?P<val>\d+)[^0-9]?")
-            match = pattern.match(line)
-            if not match:
-                _logs += line + "\n"
-                continue
-            m = match.groupdict()
-            key = m.get("key")
-            val = m.get("val")
-            _telemetry[key] = val
-
-        return _logs, _telemetry
-
     def terminate(self, join=False):
         """
         stop the thread and cleanup any leftover jobs
@@ -176,12 +127,6 @@ class BaseCheck:
 
         self.delete_job()
 
-        __labels__ = {
-            "name": self.config.name,
-            "namespace": self.config.namespace,
-            "status": self.status.status.name,
-            "escalated": self.escalated,
-        }
         if self.status.OK and self.escalated:
             # recovery!
             self.escalate(recovery=True)
@@ -200,42 +145,14 @@ class BaseCheck:
             # not state OK and not enough failures to escalate
             self._next_interval = self.config.retry_interval
 
-        if self.metrics_queue:
-            self.metrics_queue.put(
-                metrics.MetricsQueueItem(
-                    "mozalert_check_runtime", **__labels__, value=self._runtime.seconds,
-                )
+        # TODO we need to check if we've got metrics mixed in
+        if hasattr(self,"metrics_queue"):
+            self.metrics_queue.put_many(
+                self.config.name,
+                self.config.namespace,
+                labels=self.metric_labels,
+                metrics=self.metric_values,
             )
-            self.metrics_queue.put(
-                metrics.MetricsQueueItem(
-                    f"mozalert_check_{self.status.status.name}_count", **__labels__
-                )
-            )
-            self.metrics_queue.put(
-                metrics.MetricsQueueItem(
-                    "mozalert_check_escalations",
-                    **__labels__,
-                    value=int(self.escalated),
-                )
-            )
-
-            if self.telemetry.get("total_time"):
-                self.metrics_queue.put(
-                    metrics.MetricsQueueItem(
-                        "mozalert_check_total_time",
-                        **__labels__,
-                        value=float(self.telemetry.get("total_time")),
-                    )
-                )
-
-            if self.telemetry.get("latency"):
-                self.metrics_queue.put(
-                    metrics.MetricsQueueItem(
-                        "mozalert_check_latency",
-                        **__labels__,
-                        value=float(self.telemetry.get("latency")),
-                    )
-                )
 
         # set the next_check for the CRD status
         self.status.next_check = now() + datetime.timedelta(seconds=self.next_interval)
@@ -261,3 +178,4 @@ class BaseCheck:
         self._thread.start()
 
         self.status.next_check = now() + datetime.timedelta(seconds=self.next_interval)
+

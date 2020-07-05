@@ -4,7 +4,6 @@ import queue
 
 from mozalert import kubeclient, check, metrics, event, checkmonitor
 
-
 class Controller(threading.Thread):
     """
     the Controller runs the main thread which tails the event stream for objects in our CRD. It
@@ -26,7 +25,7 @@ class Controller(threading.Thread):
 
         self.watch = None
 
-        self.metrics_queue = queue.Queue()
+        self.metrics_queue = metrics.queue.MetricsQueue()
 
         self.kube = kubeclient.KubeClient()
 
@@ -94,7 +93,8 @@ class Controller(threading.Thread):
         )
         self.check_monitor_thread.start()
 
-        self.metrics_thread = metrics.MetricsThread(
+        # start the metrics consumer
+        self.metrics_thread = metrics.thread.MetricsThread(
             q=self.metrics_queue, shutdown=lambda: self.metrics_thread_shutdown
         )
         self.metrics_thread.start()
@@ -120,6 +120,7 @@ class Controller(threading.Thread):
                 # and in those cases restarting the controller pod is appropriate. TODO validate
                 if evt.ERROR:
                     logging.error("Received ERROR operation, Dying.")
+                    self.terminate()
                     return
 
                 if evt.BADEVENT:
