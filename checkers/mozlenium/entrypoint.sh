@@ -21,16 +21,24 @@ export NODE_PATH=/app/node_modules
 
 export PATH=${PATH}:${NODE_PATH}/geckodriver/bin:/app/firefox
 
+if [[ -e /app/extra.sh ]]; then
+  # in case anyone is using this as a 
+  # base image and wants to inject some
+  # special sauce
+  source /app/extra.sh
+fi
+
 #geckodriver -V
 #firefox --version
 
-start=$(date +%s)
+stime=$(date +%s%3N)
 node --abort-on-uncaught-exception --unhandled-rejections=strict $f $*
 res=$?
-end=$(date +%s)
+etime=$(date +%s%3N)
 
-((runtime=end-start))
+((runtime=etime-stime))
 
-echo "Check finished in ${runtime:-0} seconds with status code $res"
+echo "Check finished in ${runtime:-0} ms with status code $res"
+echo TELEMETRY: node_time ${runtime:-0}
 
 exit $res

@@ -33,7 +33,7 @@ $browser.get = function(url, timeoutMsOpt) {
 		metrics.push($browser.executeScript("return window.performance.timing.responseStart"));
 		metrics.push($browser.executeScript("return window.performance.timing.domComplete"));
 		return Promise.all(metrics).then(function (metrics) {
-			console.log("TELEMETRY: total_time", metrics[2] - metrics[0]);
+			console.log("TELEMETRY: get_time", metrics[2] - metrics[0]);
 			console.log("TELEMETRY: latency", metrics[1] - metrics[0]);
 		});
 	});

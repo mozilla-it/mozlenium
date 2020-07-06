@@ -61,13 +61,3 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
 RUN wget -q -O nightly.tar.bz 'https://download.mozilla.org/?product=firefox-nightly-latest-ssl&os=linux64&lang=en-US' && \
     tar xjf nightly.tar.bz && \
     rm -f nightly.tar.bz
-
-ENV NODE_PATH /app/node_modules
-
-RUN npm install selenium-webdriver geckodriver lodash assert request
-
-COPY mozlenium.js /app/node_modules/
-
-COPY entrypoint.sh /app
-
-ENTRYPOINT [ "/app/entrypoint.sh" ]

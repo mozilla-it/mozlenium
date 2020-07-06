@@ -1,22 +1,19 @@
 
 var $driver = require('selenium-webdriver');
 
-const firefox = require('selenium-webdriver/firefox');
+const chrome = require('selenium-webdriver/chrome');
 
 const _ = require('lodash');
 
-var options = new firefox.Options();
+var chromeCapabilities = $driver.Capabilities.chrome();
 
-options.addArguments("-headless");
-options.addArguments("--window-size=1024,768");
-options.addArguments("--disable-gpu");
-options.addArguments("--test-type");
-options.addArguments("--no-sandbox");
-options.addArguments("--disable-dev-shm-usage");
+chromeCapabilities.set('chromeOptions',{
+    'args': ['--headless', 'window-size=1024,768', '--disable-gpu', '--test-type', '--no-sandbox', '--disable-dev-shm-usage']
+});
 
 var $browser = new $driver.Builder()
-    .forBrowser('firefox')
-    .setFirefoxOptions(options)
+    .forBrowser('chrome')
+    .withCapabilities(chromeCapabilities)
     .build();
 
 var $secure = {}
@@ -27,16 +24,16 @@ _.each(process.env, (val,key) => {
 $browser.unmeasuredGet = $browser.get;
 
 $browser.get = function(url, timeoutMsOpt) {
-	var metrics = [];
-	return $browser.unmeasuredGet(url, timeoutMsOpt).then(function () {
-		metrics.push($browser.executeScript("return window.performance.timing.navigationStart"));
-		metrics.push($browser.executeScript("return window.performance.timing.responseStart"));
-		metrics.push($browser.executeScript("return window.performance.timing.domComplete"));
-		return Promise.all(metrics).then(function (metrics) {
-			console.log("TELEMETRY: total_time", metrics[2] - metrics[0]);
-			console.log("TELEMETRY: latency", metrics[1] - metrics[0]);
-		});
-	});
+        var metrics = [];
+        return $browser.unmeasuredGet(url, timeoutMsOpt).then(function () {
+                metrics.push($browser.executeScript("return window.performance.timing.navigationStart"));
+                metrics.push($browser.executeScript("return window.performance.timing.responseStart"));
+                metrics.push($browser.executeScript("return window.performance.timing.domComplete"));
+                return Promise.all(metrics).then(function (metrics) {
+                        console.log("TELEMETRY: get_time", metrics[2] - metrics[0]);
+                        console.log("TELEMETRY: latency", metrics[1] - metrics[0]);
+                });
+        });
 };
 
 $browser.waitForElement = function (locatorOrElement, timeoutMsOpt) {
