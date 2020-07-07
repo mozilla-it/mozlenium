@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -o pipefail
+
 if [[ ! $1 ]]; then
 	echo "Must specify URL to check"
 	exit 2
