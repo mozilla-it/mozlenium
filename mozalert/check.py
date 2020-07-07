@@ -7,8 +7,6 @@ from types import SimpleNamespace
 from mozalert import base, status, metrics
 from mozalert.utils.dt import now
 
-import importlib
-
 from mozalert.kubeclient import ApiException
 
 from datetime import timedelta
@@ -29,34 +27,6 @@ class Check(base.BaseCheck, metrics.mixin.MetricsMixin):
         self._shutdown_max_wait_sec = float(kwargs.get("shutdown_max_wait_sec", 10))
 
         super().__init__(**kwargs)
-
-    def escalate(self, recovery=False):
-        self.escalated = not recovery
-        for esc in self.config.escalations:
-            escalation_type = esc.get("type", "email")
-            logging.info(f"Escalating {self} via {escalation_type}")
-            args = esc.get("args", {})
-            try:
-                module = importlib.import_module(
-                    f".escalations.{escalation_type}", "mozalert"
-                )
-                Escalation = getattr(module, "Escalation")
-                e = Escalation(
-                    f"{self}",
-                    self.status.status.name,
-                    attempt=self.status.attempt,
-                    max_attempts=self.config.max_attempts,
-                    last_check=str(self.status.last_check),
-                    logs=self.status.logs,
-                    args=args,
-                )
-                e.run()
-            except Exception as e:
-                logging.error(
-                    f"Failed to send escalation type {escalation_type} for {self}"
-                )
-                logging.error(sys.exc_info()[0])
-                logging.error(e)
 
     def run_job(self, shutdown=lambda: False):
         """

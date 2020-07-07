@@ -2,6 +2,8 @@ import sys
 import logging
 import threading
 
+import importlib
+
 from types import SimpleNamespace
 import datetime
 
@@ -162,6 +164,34 @@ class BaseCheck:
             self.start_thread()
             # update the CRD status subresource
             self.set_crd_status()
+
+    def escalate(self, recovery=False):
+        self.escalated = not recovery
+        for esc in self.config.escalations:
+            escalation_type = esc.get("type", "email")
+            logging.info(f"Escalating {self} via {escalation_type}")
+            args = esc.get("args", {})
+            try:
+                module = importlib.import_module(
+                    f".escalations.{escalation_type}", "mozalert"
+                )
+                Escalation = getattr(module, "Escalation")
+                e = Escalation(
+                    f"{self}",
+                    self.status.status.name,
+                    attempt=self.status.attempt,
+                    max_attempts=self.config.max_attempts,
+                    last_check=str(self.status.last_check),
+                    logs=self.status.logs,
+                    args=args,
+                )
+                e.run()
+            except Exception as e:
+                logging.error(
+                    f"Failed to send escalation type {escalation_type} for {self}"
+                )
+                logging.error(sys.exc_info()[0])
+                logging.error(e)
 
     def start_thread(self):
         """
