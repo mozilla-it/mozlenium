@@ -1,0 +1,35 @@
+{
+  "name": "mozlenium",
+  "version": "0.0.1",
+  "description": "",
+  "main": "wrapper.js",
+  "dependencies": {
+    "assert": "^2.0.0",
+    "handpick": "^2.1.0",
+    "lodash": "^4.17.18",
+    "request": "^2.88.2",
+    "selenium-webdriver": "^4.0.0-alpha.7"
+  },
+  "devDependencies": {},
+  "chromeDependencies": {
+    "chromedriver": ">=83.0.1"
+  },
+  "firefoxDependencies": {
+    "geckodriver": "^1.19.1"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "install-firefox-dependencies": "handpick --target=firefoxDependencies",
+    "install-chrome-dependencies": "handpick --target=chromeDependencies"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mozafrank/check-demo.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mozafrank/check-demo/issues"
+  },
+  "homepage": "https://github.com/mozafrank/check-demo#readme"
+}
