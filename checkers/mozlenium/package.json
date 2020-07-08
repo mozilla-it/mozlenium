@@ -24,12 +24,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mozafrank/check-demo.git"
+    "url": "git+https://github.com/mozilla-it/mozalert.git"
   },
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/mozafrank/check-demo/issues"
+    "url": "https://github.com/mozilla-it/mozalert/issues"
   },
-  "homepage": "https://github.com/mozafrank/check-demo#readme"
+  "homepage": "https://github.com/mozilla-it/mozalert#readme"
 }
