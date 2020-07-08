@@ -1,5 +1,0 @@
-FROM node:latest
-
-RUN apt update && \
-    apt -y install firefox-esr && \
-    apt clean
