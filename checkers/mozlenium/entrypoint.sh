@@ -1,11 +1,8 @@
 #!/bin/bash
 
-if [[ "$1" ]]; then
-  f=$1
-  shift
-else
-  f=$(ls /checks/*.js | head -1)
-fi
+f=$(ls /checks/*.js | head -1)
+
+browser=${1:-firefox}
 
 if [[ ! "$f" ]]; then
   echo "No check file specified"
@@ -28,11 +25,20 @@ if [[ -e /app/extra.sh ]]; then
   source /app/extra.sh
 fi
 
+if [[ ${WRAPPER:-1} -eq 1 ]]; then
+  # the wrapper edition!
+  echo 'async function runner($browser, $driver, $secure) {' > check.js
+  cat $f | grep -v "require('mozlenium')();" | sed 's|^$browser\.|return $browser.|' >> check.js
+  echo -e '}\n\nmodule.exports = runner;' >> check.js
+  f=wrapper.js
+fi
+
+
 #geckodriver -V
 #firefox --version
 
 stime=$(date +%s%3N)
-node --abort-on-uncaught-exception --unhandled-rejections=strict $f $*
+node --abort-on-uncaught-exception --unhandled-rejections=strict $f $browser
 res=$?
 etime=$(date +%s%3N)
 
