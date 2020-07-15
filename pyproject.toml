@@ -13,6 +13,7 @@ prometheus_client = "*"
 
 [tool.poetry.scripts]
 mozalert = "mozalert.main:main"
+mozalert-validator = "mozalert.validate:main"
 
 [tool.poetry.dev-dependencies]
 moto = "*"
