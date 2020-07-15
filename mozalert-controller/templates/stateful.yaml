@@ -22,7 +22,7 @@ spec:
       - image: "{{ .Values.image.repository }}:{{ .Values.image.version }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         name: {{ .Chart.Name }}
-        {{- if .Values.secretRef -}}
+        {{- if .Values.secretRef }}
         envFrom:
         - secretRef:
             name: {{ .Values.secretRef }}
