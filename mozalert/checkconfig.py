@@ -1,3 +1,5 @@
+import os
+
 class CheckConfig:
     """
     the CheckConfig is used by Check objects as well as Event objects.
@@ -15,7 +17,7 @@ class CheckConfig:
 
         self._retry_interval = float(kwargs.get("retry_interval", 0))
         self._notification_interval = float(kwargs.get("notification_interval", 0))
-        self._escalations = kwargs.get("escalations", [])
+        self._escalations = self.parse_escalations(kwargs.get("escalations", []))
         self._max_attempts = int(kwargs.get("max_attempts", "3"))
         self._timeout = float(kwargs.get("timeout", 0))
 
@@ -81,6 +83,25 @@ class CheckConfig:
                 ("pod_spec", self.pod_spec),
             ]
         )
+
+    @staticmethod
+    def parse_escalations(escalations):
+        """
+        Escalations can take args and env_args.
+        env_args contain the arg key but the value is a reference
+        to an env var. it's the user's responsibility to  ensure
+        that env var has a value.
+        """
+        _escalations = []
+        for e in escalations:
+            if "env_args" in e:
+                if "args" not in e:
+                    e["args"] = {}
+                for k,v in e["env_args"].items():
+                    e["args"][k] = os.environ.get(v,"")
+                del e["env_args"]
+            _escalations += [e]
+        return _escalations
 
     def build_pod_spec(self, **kwargs):
         """
