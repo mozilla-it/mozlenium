@@ -8,6 +8,7 @@ if (!selectedBrowser) {
   selectedBrowser = 'firefox';
 }
 const $driver = require('selenium-webdriver');
+
 let $browser;
 // Add more browsers here as needed
 if (selectedBrowser === 'chrome') {
@@ -40,6 +41,10 @@ $browser.get = (url, timeoutMsOpt) =>
     .then(([navigationStart, responseStart, domComplete]) => {
       console.log('TELEMETRY: get_time', domComplete - navigationStart);
       console.log('TELEMETRY: latency', responseStart - navigationStart);
+    })
+    .catch(error => {
+      console.log(`GET error for url: ${url}`, error);
+      throw new Error(error);
     });
 
 // Proxy $browser to perform latency measures on "wait" method
@@ -66,7 +71,8 @@ $browser.waitForAndFindElement = (locatorOrElement, timeoutMsOpt) => {
     })
     .then(() => foundElement)
     .catch((error) => {
-      console.log('Error waiting for elment: ', error);
+      console.log(`Error waiting for element ${locatorOrElement}: `, error);
+      throw new Error(error);
     });
 };
 
