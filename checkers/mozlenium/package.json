@@ -21,7 +21,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "install-firefox-dependencies": "handpick --target=firefoxDependencies",
     "install-chrome-dependencies": "handpick --target=chromeDependencies",
-    "execute": "SSO_LDAP_PASSWORD=$1 ./run.sh $2"
+    "execute:firefox": "IS_CLI=true SSO_LDAP_PASSWORD=$npm_config_ldap_pw ./run.sh firefox",
+    "execute:chrome": "IS_CLI=true SSO_LDAP_PASSWORD=$npm_config_ldap_pw ./run.sh chrome"
   },
   "repository": {
     "type": "git",
