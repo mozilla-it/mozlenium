@@ -115,9 +115,6 @@ class Controller(threading.Thread):
                 evt = event.Event(**crd_event)
 
                 # restart the controller if ERROR operation is detected.
-                # dying is harsh but in theory states should be preserved in the k8s object.
-                # I've only seen the ERROR state when applying changes to the CRD definition
-                # and in those cases restarting the controller pod is appropriate. TODO validate
                 if evt.ERROR:
                     logging.error("Received ERROR operation, Dying.")
                     self.terminate()
@@ -160,6 +157,7 @@ class Controller(threading.Thread):
                         kube=self.kube,
                         config=evt.config,
                         metrics_queue=self.metrics_queue,
+                        pre_status=evt.status,
                     )
 
         logging.info("Controller shut down")

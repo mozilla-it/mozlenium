@@ -52,7 +52,15 @@ class BaseCheck:
 
         if self._pre_status:
             self._status.parse_pre_status(**self._pre_status)
-            self._next_interval = self.status.next_interval
+            if self._next_interval < self.status.next_interval:
+                # the next_interval from our pre-status is longer than
+                # the interval from our config, this could be because
+                # the user modified the interval, so lets use the lesser
+                # of the two.
+                self.status.next_check = now() + datetime.timedelta(seconds=self._next_interval)
+            else:
+                self._next_interval = self.status.next_interval
+
             self._pre_status = {}
 
         self.start_thread()
