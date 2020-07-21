@@ -60,12 +60,13 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
 
 RUN wget -q -O nightly.tar.bz 'https://download.mozilla.org/?product=firefox-nightly-latest-ssl&os=linux64&lang=en-US' && \
     tar xjf nightly.tar.bz && \
+    ln -s /app/firefox/firefox /usr/local/bin/firefox && \
     rm -f nightly.tar.bz
 
 RUN curl -sS -o - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && \
     echo "deb [arch=amd64]  http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list && \
     apt-get -y update && \
-    apt-get -y install google-chrome-stable && \
+    apt-get -y install google-chrome-stable --no-install-recommends && \
     apt-get clean
 
 RUN wget https://chromedriver.storage.googleapis.com/2.41/chromedriver_linux64.zip && \
@@ -76,7 +77,7 @@ RUN wget https://chromedriver.storage.googleapis.com/2.41/chromedriver_linux64.z
 
 ENV NODE_PATH /app/node_modules
 
-COPY wrapper.js package.json mozlenium.js firefox-browser.js chrome-browser.js entrypoint.sh wrapper.js /app/
+COPY package.json mozlenium.js firefox-browser.js chrome-browser.js entrypoint.sh wrapper.js /app/
 
 RUN npm install && \
     npm run install-chrome-dependencies && \
