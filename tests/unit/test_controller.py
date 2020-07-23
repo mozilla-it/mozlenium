@@ -3,8 +3,6 @@ import unittest.mock as mock
 import logging
 import datetime
 
-import copy
-
 import mozalert.kubeclient
 
 from mozalert.controller import Controller
@@ -54,10 +52,10 @@ class TestController(unittest.TestCase):
     @mock.patch.object(mozalert.kubeclient, "KubeClient")
     def test_controller_create_re_check(self, FakeKube):
         fake.FakeClient.FakeStream = fake_restart_stream
-        # the ADD event has an interval of 60 seconds so if we can
-        # see a next_interval of > 60 we know the status was read
+        # the ADD event has an interval of 600 seconds so if we can
+        # see a next_interval of < 600 we know the status was read
         events.re_add_event["object"]["status"]["next_check"] = str(
-            datetime.datetime.utcnow() + datetime.timedelta(seconds=1000)
+            datetime.datetime.utcnow() + datetime.timedelta(seconds=10)
         ).split(".")[0]
         FakeKube.return_value = fake.FakeClient
 
@@ -76,7 +74,7 @@ class TestController(unittest.TestCase):
         assert c.checks[check_name].thread.is_alive(), "Could not find the thread"
 
         assert (
-            c.checks[check_name].next_interval > 100
+            c.checks[check_name].next_interval < 100
         ), "next_interval not set correctly"
 
         shutdown = True
