@@ -1,6 +1,8 @@
 from enum import Enum
 import re
 from datetime import timedelta
+import logging
+import sys
 
 from mozalert.checkconfig import CheckConfig
 
@@ -135,9 +137,14 @@ class Event:
         regex = re.compile(
             r"((?P<hours>\d+?)h)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?"
         )
-        parts = regex.match(time_str)
+        try:
+            parts = regex.match(time_str)
+        except Exception as e:
+            logging.error(e)
+            logging.error(sys.exc_info()[0])
+            return timedelta(minutes=0)
         if not parts:
-            return
+            return timedelta(minutes=0)
         parts = parts.groupdict()
         time_params = {}
         for (name, param) in iter(parts.items()):
