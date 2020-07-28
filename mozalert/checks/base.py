@@ -7,8 +7,9 @@ import importlib
 from types import SimpleNamespace
 import datetime
 
-from mozalert import status, metrics, checkconfig
+from mozalert import status, metrics, checks
 from mozalert.utils.dt import now
+
 
 class BaseCheck:
     """
@@ -40,7 +41,7 @@ class BaseCheck:
         if _config:
             self.config = _config
         else:
-            self.config = checkconfig.CheckConfig(**kwargs)
+            self.config = checks.config.CheckConfig(**kwargs)
 
         self.shutdown = False
         self._runtime = datetime.timedelta(seconds=0)
@@ -57,7 +58,9 @@ class BaseCheck:
                 # the interval from our config, this could be because
                 # the user modified the interval, so lets use the lesser
                 # of the two.
-                self.status.next_check = now() + datetime.timedelta(seconds=self._next_interval)
+                self.status.next_check = now() + datetime.timedelta(
+                    seconds=self._next_interval
+                )
             else:
                 self._next_interval = self.status.next_interval
 
@@ -115,6 +118,7 @@ class BaseCheck:
             try:
                 self._thread.cancel()
             except Exception as e:
+                logging.error("Termination error")
                 logging.info(sys.exc_info()[0])
                 logging.info(e)
 
@@ -132,6 +136,7 @@ class BaseCheck:
         try:
             self.run_job(shutdown)
         except Exception as e:
+            logging.error("Job start error")
             logging.info(sys.exc_info()[0])
             logging.info(e)
 
@@ -156,7 +161,7 @@ class BaseCheck:
             self._next_interval = self.config.retry_interval
 
         # TODO we need to check if we've got metrics mixed in
-        if hasattr(self,"metrics_queue"):
+        if hasattr(self, "metrics_queue"):
             self.metrics_queue.put_many(
                 self.config.name,
                 self.config.namespace,
@@ -216,4 +221,3 @@ class BaseCheck:
         self._thread.start()
 
         self.status.next_check = now() + datetime.timedelta(seconds=self.next_interval)
-

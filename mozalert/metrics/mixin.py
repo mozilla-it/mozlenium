@@ -1,6 +1,6 @@
-
 import logging
 import re
+
 
 class MetricsMixin:
     """
@@ -53,4 +53,3 @@ class MetricsMixin:
             _telemetry[key] = val
 
         return _logs, _telemetry
-
