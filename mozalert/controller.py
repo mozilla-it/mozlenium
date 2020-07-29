@@ -1,13 +1,17 @@
 import logging
 import threading
 import queue
+import sys
+from types import SimpleNamespace
+from time import sleep
 
-from mozalert import kubeclient, check, metrics, event, checkmonitor
+from mozalert import kubeclient, checks, metrics, events
+
 
 class Controller(threading.Thread):
     """
-    the Controller runs the main thread which tails the event stream for objects in our CRD. It
-    manages check threads and ensures they run when/how they're supposed to.
+    the Controller runs the main thread which tails the event stream for objects in the CRD. It
+    manages threads, including an event handler, and makes sure things run how they're supposed to.
     """
 
     def __init__(self, **kwargs):
@@ -19,145 +23,134 @@ class Controller(threading.Thread):
 
         self.shutdown = kwargs.get("shutdown", lambda: False)
 
-        self.metrics_thread_shutdown = False
-        self.check_monitor_thread_shutdown = False
         self._check_monitor_interval = kwargs.get("check_monitor_interval", 60)
 
-        self.watch = None
-
         self.metrics_queue = metrics.queue.MetricsQueue()
+        self.event_queue = events.queue.EventQueue()
 
         self.kube = kubeclient.KubeClient()
 
-        self._checks = {}
+        self.threads = {}
 
         self.setName("controller-thread")
-
-    @property
-    def checks(self):
-        return self._checks
 
     @property
     def clients(self):
         return self._clients
 
+    @property
+    def checks(self):
+        return self.threads["check-handler"].thread.checks
+
     def terminate(self):
         logging.info("Received SIGTERM request. Shutting down controller.")
+        for t in self.threads.keys():
+            self.threads[t].shutdown = True
 
-        for c in self.checks.keys():
-            self._checks[c].terminate()
+    def new_thread(self, name, obj, **kwargs):
+        """
+        creates a namespace with a thread class, shutdown function
+        and list of kwargs. This way we can restart the thread
+        without having to resupply all the arguments.
+        """
+        self.threads[name] = SimpleNamespace()
+        self.threads[name].shutdown = False
+        self.threads[name].obj = obj
+        self.threads[name].kwargs = kwargs
+        self.threads[name].thread = obj(
+            **kwargs, shutdown=lambda: self.threads[name].shutdown
+        )
+        self.threads[name].thread.setName(name)
+        self.threads[name].thread.start()
 
-        self.check_monitor_thread_shutdown = True
-        self.metrics_thread_shutdown = True
+    def restart_thread(self, name):
+        """
+        check to see if a given thread is running, shut it down if it is,
+        and start the thread again using the previously-supplied arguments.
 
-        for c in self.checks.keys():
-            self._checks[c].thread.join()
-        logging.info("finished joining checks")
-
-    def kill_check(self, check_name):
-        if check_name not in self.checks:
-            logging.warning(f"{check_name} not found in checks`")
+        NOTE: this attempts to do the right thing if the thread is running, by setting the
+        thread to shutdown then waiting for it to stop. But this could block forever if anything
+        goes wrong with shutting down the thread. So this function should only be
+        used to shutdown a thread with caution.
+        """
+        if name not in self.threads:
+            logging.error(f"{name} is not a valid thread")
             return
+        if self.threads[name].thread.is_alive():
+            logging.info(
+                f"Trying to restart {name} but it's still running, attempting to shut down"
+            )
+            self.threads[name].shutdown = True
+            self.threads[name].thread.join()
 
-        self._checks[check_name].terminate()
-        del self._checks[check_name]
+        self.new_thread(
+            name, self.threads[name].obj, **self.threads[name].kwargs,
+        )
 
     def run(self):
         """
-        the main thread watches the api server event stream for our crd objects and process
-        events as they come in. Each event has an associated operation:
-        
-        ADDED: a new check has been created. the main thread creates a new check object which
-               creates a threading.Timer set to the check_interval.
-        
-        DELETED: a check has been removed. Cancel/resolve any running threads and delete the
-                 check object.
-
-        MODIFIED: this can be triggered by the user patching their check, or by a check thread
-                  updating the object status. NOTE: updating the status subresource SHOULD NOT
-                  trigger a modify, this is probably a bug in k8s. when a check is updated the
-                  changes are applied to the check object.
-
-        ERROR: this can occur sometimes when the CRD is changed; it causes the process to die
-               and restart.
+        the controller runs various threads:
+           * healthcheck-thread
+             this runs every check_monitor_interval seconds and checks the running check
+             threads against what's defined in k8s.
+           * metrics
+             this thread consumes the metrics_queue and sends metrics to prometheus using
+             the push gateway.
+           * event handler
+             this polls the event stream from k8s for changes to the CRD and sends new
+             events to the check handler via the event queue
+           * check handler
+             consumes the event queue and maintains the running check threads.
 
         """
 
-        self.check_monitor_thread = checkmonitor.CheckMonitor(
+        # start the check_monitor thread
+        self.new_thread(
+            "healthcheck-thread",
+            checks.monitor.CheckMonitor,
             kube=self.kube,
             domain=self.domain,
             version=self.version,
             plural=self.plural,
             interval=self._check_monitor_interval,
-            shutdown=lambda: self.check_monitor_thread_shutdown,
         )
-        self.check_monitor_thread.start()
 
         # start the metrics consumer
-        self.metrics_thread = metrics.thread.MetricsThread(
-            q=self.metrics_queue, shutdown=lambda: self.metrics_thread_shutdown
+        self.new_thread(
+            "metrics-handler", metrics.thread.MetricsThread, q=self.metrics_queue
         )
-        self.metrics_thread.start()
 
-        logging.info("Waiting for events...")
-        resource_version = ""
+        # start the event handler
+        self.new_thread(
+            "event-handler",
+            events.handler.EventHandler,
+            q=self.event_queue,
+            kube=self.kube,
+            domain=self.domain,
+            version=self.version,
+            plural=self.plural,
+        )
+
+        # start the check handler
+        self.new_thread(
+            "check-handler",
+            checks.handler.CheckHandler,
+            q=self.event_queue,
+            kube=self.kube,
+            metrics_queue=self.metrics_queue,
+        )
+
+        # run the main execution loop
+        # check to make sure each thread is alive, and restart it if not
         while not self.shutdown():
-            self.watch = self.kube.Watch()
-            stream = self.watch.stream(
-                self.kube.CustomObjectsApi.list_cluster_custom_object,
-                self.domain,
-                self.version,
-                self.plural,
-                resource_version=resource_version,
-                timeout_seconds=5,  # TODO parameterize this timeout
-            )
-            for crd_event in stream:
-                evt = event.Event(**crd_event)
+            for t in self.threads.keys():
+                if not self.shutdown() and not self.threads[t].thread.is_alive():
+                    logging.error(f"Thread {t} was not running. Restarting.")
+                    self.restart_thread(t)
+            sleep(2)
 
-                # restart the controller if ERROR operation is detected.
-                if evt.ERROR:
-                    logging.error("Received ERROR operation, Dying.")
-                    self.terminate()
-                    return
-
-                if evt.BADEVENT:
-                    logging.warning(f"Received unexpected {evt.type}. Moving on.")
-                    continue
-
-                logging.debug(f"{evt.type} operation detected for thread {evt}")
-
-                check_name = str(evt)
-                resource_version = evt.resource_version
-
-                if evt.ADDED:
-                    # create a new check and read any
-                    # found status back into the check
-                    self._checks[check_name] = check.Check(
-                        kube=self.kube,
-                        config=evt.config,
-                        metrics_queue=self.metrics_queue,
-                        pre_status=evt.status,
-                    )
-
-                if evt.DELETED:
-                    self.kill_check(check_name)
-
-                if evt.MODIFIED:
-                    # a MODIFIED event could either be a config change or a status
-                    # change, so we need to detect which it is
-                    if dict(self.checks[check_name].config) == dict(evt.config):
-                        logging.debug("Detected a status change")
-                        continue
-
-                    logging.info(f"Detected a config change to {evt}")
-
-                    self.kill_check(check_name)
-
-                    self._checks[check_name] = check.Check(
-                        kube=self.kube,
-                        config=evt.config,
-                        metrics_queue=self.metrics_queue,
-                        pre_status=evt.status,
-                    )
-
+        # main loop is broken so shut down
+        for t in self.threads.keys():
+            self.threads[t].shutdown = True
+            self.threads[t].thread.join()
         logging.info("Controller shut down")

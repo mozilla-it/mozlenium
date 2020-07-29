@@ -1,8 +1,7 @@
 import threading
 import logging
 from time import sleep
-from mozalert.status import Status
-from mozalert.event import Event
+from mozalert import status, events
 from mozalert.utils.dt import now
 import pytz
 import datetime
@@ -28,8 +27,6 @@ class CheckMonitor(threading.Thread):
         )
 
         self.sequential_failed_runs = 0
-
-        self.setName("check-monitor")
 
     def terminate(self):
         return self.join()
@@ -77,16 +74,16 @@ class CheckMonitor(threading.Thread):
             check_list = {"items": []}
 
         for obj in check_list.get("items"):
-            event = Event(type="ADD", object=obj)
-            status = Status(**event.status)
-            name = str(event)
+            evt = events.event.Event(type="ADD", object=obj)
+            st = status.Status(**evt.status)
+            name = str(evt)
 
             # do some sanity checks
             if (
-                not status.next_check
-                or pytz.utc.localize(status.next_check) + datetime.timedelta(seconds=30)
+                not st.next_check
+                or pytz.utc.localize(st.next_check) + datetime.timedelta(seconds=30)
                 < now()
-            ) and not status.RUNNING:
+            ) and not st.RUNNING:
                 failed += 1
                 logging.warning(
                     f"Sanity check failed: {name} next_check is in the past but status is not RUNNING"

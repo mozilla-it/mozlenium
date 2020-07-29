@@ -8,20 +8,19 @@ from prometheus_client import CollectorRegistry, Gauge, push_to_gateway, Counter
 
 from mozalert.metrics.config import MetricsConfig
 
-SupportedMetricTypes = [ "Counter", "Gauge" ]
+SupportedMetricTypes = ["Counter", "Gauge"]
+
 
 class MetricsThread(threading.Thread):
     def __init__(self, q, shutdown=lambda: False, prometheus_gateway=None):
         super().__init__()
         # metrics_queue object
-        self.q = q 
+        self.q = q
         self.prometheus_gateway = prometheus_gateway
         self.shutdown = shutdown
 
         if not self.prometheus_gateway:
             self.prometheus_gateway = os.environ.get("PROMETHEUS_GATEWAY", None)
-
-        self.setName("metrics-thread")
 
     def terminate(self):
         return self.join()
@@ -68,7 +67,9 @@ class MetricsThread(threading.Thread):
                 if self.prometheus_gateway:
                     logging.debug("pushing metric to prometheus")
                     push_to_gateway(
-                        self.prometheus_gateway, job="mozalert.metrics", registry=registry
+                        self.prometheus_gateway,
+                        job="mozalert.metrics",
+                        registry=registry,
                     )
             except Exception as e:
                 logging.info(e)

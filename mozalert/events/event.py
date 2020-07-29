@@ -4,7 +4,7 @@ from datetime import timedelta
 import logging
 import sys
 
-from mozalert.checkconfig import CheckConfig
+from mozalert.checks.config import CheckConfig
 
 
 class EventType(Enum):
@@ -128,6 +128,8 @@ class Event:
         """
         parse_time takes either a number (in minutes) or a formatted time string [XXh][XXm][XXs]
         """
+        if not time_str:
+            return timedelta(minutes=0)
         try:
             minutes = float(time_str)
             return timedelta(minutes=minutes)

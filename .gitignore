@@ -22,3 +22,6 @@ node_modules
 
 site-checker-secrets.yaml
 *secrets.yaml
+
+# related to mozlenium testing
+check.js

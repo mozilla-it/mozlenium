@@ -1,4 +1,3 @@
-
 import logging
 import queue
 from types import SimpleNamespace
@@ -6,6 +5,7 @@ from mozalert.metrics.config import MetricsConfig
 from collections import namedtuple
 
 QueueItem = namedtuple("QueueItem", ["key", "name", "namespace", "labels", "value"])
+
 
 class MetricsQueue:
     def __init__(self):
@@ -67,4 +67,3 @@ class MetricsQueue:
     @q.setter
     def q(self, q):
         self._q = q
-
