@@ -19,10 +19,7 @@ class Validator:
     """
 
     def __init__(self, domain, version, plural):
-        self.domain = domain
-        self.version = version
-        self.plural = plural
-        self.kube = kubeclient.KubeClient()
+        self.kube = kubeclient.KubeClient(domain, version, plural)
 
     def run(self):
         if not self.validate_crd():
@@ -31,7 +28,7 @@ class Validator:
     def validate_crd(self):
         try:
             check_list = self.kube.CustomObjectsApi.list_cluster_custom_object(
-                self.domain, self.version, self.plural, watch=False
+                self.kube.domain, self.kube.version, self.kube.plural, watch=False
             )
         except Exception as e:
             logging.error(e)
