@@ -4,7 +4,8 @@ from time import sleep
 
 from types import SimpleNamespace
 
-from mozalert import base, status, metrics
+from mozalert import status, metrics
+from mozalert.checks import base
 from mozalert.utils.dt import now
 
 from mozalert.kubeclient import ApiException
@@ -199,4 +200,3 @@ class Check(base.BaseCheck, metrics.mixin.MetricsMixin):
             # failure is probably ok here, if the job doesn't exist
             logging.debug(sys.exc_info()[0])
             logging.debug(e)
-

@@ -1,5 +1,6 @@
 import os
 
+
 class CheckConfig:
     """
     the CheckConfig is used by Check objects as well as Event objects.
@@ -97,8 +98,8 @@ class CheckConfig:
             if "env_args" in e:
                 if "args" not in e:
                     e["args"] = {}
-                for k,v in e["env_args"].items():
-                    e["args"][k] = os.environ.get(v,"")
+                for k, v in e["env_args"].items():
+                    e["args"][k] = os.environ.get(v, "")
                 del e["env_args"]
             _escalations += [e]
         return _escalations

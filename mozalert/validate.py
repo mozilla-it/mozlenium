@@ -17,6 +17,7 @@ class Validator:
     instead of running mozalert, check to be sure mozalert
     is currently running and installed correctly.
     """
+
     def __init__(self, domain, version, plural):
         self.domain = domain
         self.version = version
@@ -38,8 +39,10 @@ class Validator:
             return False
         return True
 
+
 def main():
     return Validator(*sys.argv[1:]).run()
+
 
 if __name__ == "__main__":
     sys.exit(main())

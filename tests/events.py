@@ -35,7 +35,7 @@ re_add_event = {
         },
         "spec": {
             "check_cm": "check-test-login-cm",
-            "check_interval": "1m",
+            "check_interval": "10m",
             "escalations": [{"args": {"email": "afrank@mozilla.com"}, "type": "email"}],
             "image": "afrank/mozlenium",
             "max_attempts": 25,
