@@ -136,7 +136,6 @@ class BaseCheck:
         try:
             self.run_job(shutdown)
         except Exception as e:
-            logging.error("Job start error")
             logging.info(sys.exc_info()[0])
             logging.info(e)
 

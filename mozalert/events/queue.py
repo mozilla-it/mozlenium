@@ -2,12 +2,7 @@ import logging
 import queue
 from types import SimpleNamespace
 from mozalert.events.event import Event
-
-# from collections import namedtuple
 import sys
-
-# QueueItem = namedtuple("QueueItem", ["key", "name", "namespace", "labels", "value"])
-
 
 class EventQueue:
     def __init__(self):

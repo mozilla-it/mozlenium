@@ -124,7 +124,7 @@ class Controller(threading.Thread):
                 if not self.shutdown() and not self.threads[t].thread.is_alive():
                     logging.error(f"Thread {t} was not running. Restarting.")
                     self.restart_thread(t)
-            sleep(5)
+            sleep(2)
 
         # main loop is broken so shut down
         for t in self.threads.keys():
