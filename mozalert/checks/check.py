@@ -171,10 +171,10 @@ class Check(base.BaseCheck, metrics.mixin.MetricsMixin):
 
         try:
             res = self.kube.CustomObjectsApi.patch_namespaced_custom_object_status(
-                "crd.k8s.afrank.local",
-                "v1",
+                self.kube.domain,
+                self.kube.version,
                 self.config.namespace,
-                "checks",
+                self.kube.plural,
                 self.config.name,
                 body=self.status.crd_status,
             )

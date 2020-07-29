@@ -11,9 +11,6 @@ class CheckMonitor(threading.Thread):
     def __init__(self, **kwargs):
         super().__init__()
         self.kube = kwargs.get("kube")
-        self.domain = kwargs.get("domain")
-        self.version = kwargs.get("version")
-        self.plural = kwargs.get("plural")
 
         self.interval = kwargs.get("interval", 60)
 
@@ -67,7 +64,7 @@ class CheckMonitor(threading.Thread):
         checks = {}
         try:
             check_list = self.kube.CustomObjectsApi.list_cluster_custom_object(
-                self.domain, self.version, self.plural, watch=False
+                self.kube.domain, self.kube.version, self.kube.plural, watch=False
             )
         except Exception as e:
             logging.error(e)

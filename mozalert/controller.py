@@ -17,9 +17,9 @@ class Controller(threading.Thread):
     def __init__(self, **kwargs):
         super().__init__()
 
-        self.domain = kwargs.get("domain", "crd.k8s.afrank.local")
-        self.version = kwargs.get("version", "v1")
-        self.plural = kwargs.get("plural", "checks")
+        domain = kwargs.get("domain")
+        version = kwargs.get("version")
+        plural = kwargs.get("plural")
 
         self.shutdown = kwargs.get("shutdown", lambda: False)
 
@@ -28,7 +28,7 @@ class Controller(threading.Thread):
         self.metrics_queue = metrics.queue.MetricsQueue()
         self.event_queue = events.queue.EventQueue()
 
-        self.kube = kubeclient.KubeClient()
+        self.kube = kubeclient.KubeClient(domain, version, plural)
 
         self.threads = {}
 
@@ -109,9 +109,6 @@ class Controller(threading.Thread):
             "healthcheck-thread",
             checks.monitor.CheckMonitor,
             kube=self.kube,
-            domain=self.domain,
-            version=self.version,
-            plural=self.plural,
             interval=self._check_monitor_interval,
         )
 
@@ -126,9 +123,6 @@ class Controller(threading.Thread):
             events.handler.EventHandler,
             q=self.event_queue,
             kube=self.kube,
-            domain=self.domain,
-            version=self.version,
-            plural=self.plural,
         )
 
         # start the check handler

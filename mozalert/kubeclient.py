@@ -11,7 +11,7 @@ class KubeClient:
     for talking to kubernetes
     """
 
-    def __init__(self):
+    def __init__(self, domain="", version="", plural=""):
         if "KUBERNETES_PORT" in os.environ:
             config.load_incluster_config()
         else:
@@ -28,6 +28,10 @@ class KubeClient:
         self._CoreV1Api = client.CoreV1Api()
         self._CustomObjectsApi = client.CustomObjectsApi(self._api_client)
 
+        self._domain = domain
+        self._version = version
+        self._plural = plural
+
     @property
     def BatchV1Api(self):
         return self._BatchV1Api
@@ -39,6 +43,18 @@ class KubeClient:
     @property
     def CustomObjectsApi(self):
         return self._CustomObjectsApi
+
+    @property
+    def domain(self):
+        return self._domain
+
+    @property
+    def version(self):
+        return self._version
+
+    @property
+    def plural(self):
+        return self._plural
 
     @staticmethod
     def make_job(name, **kwargs):

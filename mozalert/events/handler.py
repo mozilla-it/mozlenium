@@ -3,6 +3,7 @@ import logging
 import sys
 
 from mozalert import kubeclient
+import queue
 
 
 class EventHandler(threading.Thread):
@@ -10,13 +11,9 @@ class EventHandler(threading.Thread):
         super().__init__()
         self.kube = kwargs.get("kube", kubeclient.KubeClient())
         self.shutdown = kwargs.get("shutdown", lambda: False)
-
-        self.domain = kwargs.get("domain", "crd.k8s.afrank.local")
-        self.version = kwargs.get("version", "v1")
-        self.plural = kwargs.get("plural", "checks")
-
         self._stream_watch_timeout = kwargs.get("stream_watch_timeout", 5)
-        self.event_queue = kwargs.get("q")
+
+        self.event_queue = kwargs.get("q", queue.Queue())
 
     def run(self):
         resource_version = ""
@@ -24,9 +21,9 @@ class EventHandler(threading.Thread):
         while not self.shutdown():
             stream = self.kube.Watch().stream(
                 self.kube.CustomObjectsApi.list_cluster_custom_object,
-                self.domain,
-                self.version,
-                self.plural,
+                self.kube.domain,
+                self.kube.version,
+                self.kube.plural,
                 resource_version=resource_version,
                 timeout_seconds=self._stream_watch_timeout,
             )

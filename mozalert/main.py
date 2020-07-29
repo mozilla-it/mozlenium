@@ -3,12 +3,17 @@
 import sys
 import logging
 import signal
+import os
 
 from mozalert.controller import Controller
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(threadName)s: %(message)s", level=logging.INFO
 )
+
+domain = os.environ.get("DOMAIN", "crd.k8s.afrank.local")
+version = os.environ.get("VERSION", "v1")
+plural = os.environ.get("PLURAL", "checks")
 
 
 class MainThread:
@@ -18,7 +23,12 @@ class MainThread:
 
         self.shutdown = False
 
-        self.controller = Controller(shutdown=lambda: self.shutdown)
+        self.controller = Controller(
+            domain=domain,
+            version=version,
+            plural=plural,
+            shutdown=lambda: self.shutdown,
+        )
         self.controller.start()
 
     def terminate(self, signum=-1, frame=None):

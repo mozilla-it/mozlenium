@@ -39,3 +39,15 @@ class FakeClient:
 
     def make_job(*args, **kwargs):
         return None
+
+    @property
+    def domain(self):
+        return "crd.k8s.afrank.local"
+
+    @property
+    def version(self):
+        return "v1"
+
+    @property
+    def plural(self):
+        return "checks"
