@@ -1,1 +1,1 @@
-from mozalert.events import queue, event
+from mozalert.events import queue, event, thread

@@ -41,7 +41,7 @@ class TestController(unittest.TestCase):
 
         sleep(5)
 
-        assert c.handler.checks[
+        assert c.checks[
             "default/test-add-event"
         ].thread.is_alive(), "Could not find the thread"
 
@@ -71,12 +71,12 @@ class TestController(unittest.TestCase):
 
         sleep(5)
 
-        assert c.handler.checks[
+        assert c.checks[
             check_name
         ].thread.is_alive(), "Could not find the thread"
 
         assert (
-            c.handler.checks[check_name].next_interval < 100
+            c.checks[check_name].next_interval < 100
         ), "next_interval not set correctly"
 
         shutdown = True

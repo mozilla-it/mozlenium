@@ -31,8 +31,6 @@ class CheckMonitor(threading.Thread):
 
         self.sequential_failed_runs = 0
 
-        self.setName("check-monitor")
-
     def terminate(self):
         return self.join()
 

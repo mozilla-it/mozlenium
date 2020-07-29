@@ -2,13 +2,15 @@ import logging
 import threading
 import queue
 import sys
+from types import SimpleNamespace
+from time import sleep
 
-from mozalert import kubeclient, checkevent, checks, metrics, events
+from mozalert import kubeclient, checks, metrics, events
 
 
 class Controller(threading.Thread):
     """
-    the Controller runs the main thread which tails the event stream for objects in our CRD. It
+    the Controller runs the main thread which tails the event stream for objects in the CRD. It
     manages threads, including an event handler, and makes sure things run how they're supposed to.
     """
 
@@ -21,10 +23,6 @@ class Controller(threading.Thread):
 
         self.shutdown = kwargs.get("shutdown", lambda: False)
 
-        self.metrics_thread_shutdown = False
-        self.check_monitor_thread_shutdown = False
-        self.event_handler_thread_shutdown = False
-
         self._check_monitor_interval = kwargs.get("check_monitor_interval", 60)
         self._stream_watch_timeout = kwargs.get("stream_watch_timeout", 5)
 
@@ -33,6 +31,8 @@ class Controller(threading.Thread):
 
         self.kube = kubeclient.KubeClient()
 
+        self.threads = {}
+
         self.setName("controller-thread")
 
     @property
@@ -40,69 +40,93 @@ class Controller(threading.Thread):
         return self._clients
 
     @property
-    def handler(self):
-        return self.event_handler_thread
+    def checks(self):
+        return self.threads["check-handler"].thread.checks
 
     def terminate(self):
         logging.info("Received SIGTERM request. Shutting down controller.")
-        self.event_handler_thread_shutdown = True
-        self.check_monitor_thread_shutdown = True
-        self.metrics_thread_shutdown = True
+        for t in self.threads.keys():
+            self.threads[t].shutdown = True
+
+    def new_thread(self, name, obj, **kwargs):
+        self.threads[name] = SimpleNamespace()
+        self.threads[name].shutdown = False
+        self.threads[name].obj = obj
+        self.threads[name].kwargs = kwargs
+        self.threads[name].thread = obj(
+            **kwargs, shutdown=lambda: self.threads[name].shutdown
+        )
+        self.threads[name].thread.setName(name)
+        self.threads[name].thread.start()
+
+    def restart_thread(self, name):
+        if name not in self.threads:
+            logging.error(f"{name} is not a valid thread")
+            return
+        if self.threads[name].thread.is_alive():
+            logging.info(f"Trying to restart {name} but it's still running, attempting to shut down")
+            self.threads[name].shutdown = True
+            self.threads[name].thread.join()
+
+        self.new_thread(
+            name,
+            self.threads[name].obj,
+            **self.threads[name].kwargs,
+        )
 
     def run(self):
+        """
+        the controller thread runs various threads:
+           * healthcheck
+           * metrics
+           * event handler
+           * check handler
+        """
+
         # start the check_monitor thread
-        self.check_monitor_thread = checks.monitor.CheckMonitor(
+        self.new_thread(
+            "healthcheck-thread",
+            checks.monitor.CheckMonitor,
             kube=self.kube,
             domain=self.domain,
             version=self.version,
             plural=self.plural,
             interval=self._check_monitor_interval,
-            shutdown=lambda: self.check_monitor_thread_shutdown,
         )
-        self.check_monitor_thread.start()
 
         # start the metrics consumer
-        self.metrics_thread = metrics.thread.MetricsThread(
-            q=self.metrics_queue, shutdown=lambda: self.metrics_thread_shutdown
+        self.new_thread(
+            "metrics-handler", metrics.thread.MetricsThread, q=self.metrics_queue
         )
-        self.metrics_thread.start()
 
         # start the event handler
-        self.event_handler_thread = checkevent.EventHandler(
+        self.new_thread(
+            "event-handler",
+            events.thread.EventThread,
+            q=self.event_queue,
+            kube=self.kube,
+            domain=self.domain,
+            version=self.version,
+            plural=self.plural,
+        )
+
+        # start the check handler
+        self.new_thread(
+            "check-handler",
+            checks.handler.CheckHandler,
             q=self.event_queue,
             kube=self.kube,
             metrics_queue=self.metrics_queue,
-            shutdown=lambda: self.event_handler_thread_shutdown,
         )
-        self.event_handler_thread.start()
 
-        logging.info("Waiting for events...")
-        resource_version = ""
         while not self.shutdown():
-            watch = self.kube.Watch()
-            stream = watch.stream(
-                self.kube.CustomObjectsApi.list_cluster_custom_object,
-                self.domain,
-                self.version,
-                self.plural,
-                resource_version=resource_version,
-                timeout_seconds=self._stream_watch_timeout,
-            )
-            for crd_event in stream:
-                # add events to the event queue
-                try:
-                    resource_version = (
-                        crd_event.get("object", {})
-                        .get("metadata", {})
-                        .get("resourceVersion", "")
-                    )
-                    self.event_queue.put(**crd_event)
-                except Exception as e:
-                    logging.error(e)
-                    logging.error(sys.exc_info()[0])
+            for t in self.threads.keys():
+                if not self.shutdown() and not self.threads[t].thread.is_alive():
+                    logging.error(f"Thread {t} was not running. Restarting.")
+                    self.restart_thread(t)
+            sleep(5)
 
         # main loop is broken so shut down
-        self.check_monitor_thread.join()
-        self.metrics_thread.join()
-        self.event_handler_thread.join()
+        for t in self.threads.keys():
+            self.threads[t].thread.join()
         logging.info("Controller shut down")

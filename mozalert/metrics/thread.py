@@ -22,8 +22,6 @@ class MetricsThread(threading.Thread):
         if not self.prometheus_gateway:
             self.prometheus_gateway = os.environ.get("PROMETHEUS_GATEWAY", None)
 
-        self.setName("metrics-thread")
-
     def terminate(self):
         return self.join()
 

@@ -3,9 +3,9 @@ import threading
 from mozalert import checks
 
 
-class EventHandler(threading.Thread):
+class CheckHandler(threading.Thread):
     """
-    the EventHandler thread takes check events from the controller and process them as
+    the CheckHandler thread takes check events from the controller and process them as
     they come in. Each event has an associated operation:
         
     ADDED: a new check has been created. the main thread creates a new check object which
@@ -32,8 +32,6 @@ class EventHandler(threading.Thread):
         self.metrics_queue = metrics_queue
 
         self._checks = {}
-
-        self.setName("event-handler")
 
     @property
     def checks(self):
@@ -110,4 +108,4 @@ class EventHandler(threading.Thread):
                     pre_status=evt.status,
                 )
         self.terminate()
-        logging.info("Event handler shut down")
+        logging.info("Check Handler Shutdown")

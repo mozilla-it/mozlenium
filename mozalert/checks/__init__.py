@@ -1,1 +1,1 @@
-from mozalert.checks import config, monitor, check, base
+from mozalert.checks import config, monitor, check, base, handler
