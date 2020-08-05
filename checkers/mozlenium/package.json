@@ -5,7 +5,10 @@
   "main": "wrapper.js",
   "dependencies": {
     "assert": "^2.0.0",
+    "dotenv": "^8.2.0",
+    "fetch": "^1.1.0",
     "handpick": "^2.1.0",
+    "js-yaml": "^3.14.0",
     "lodash": "^4.17.18",
     "request": "^2.88.2",
     "selenium-webdriver": "^4.0.0-alpha.7"
@@ -21,8 +24,12 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "install-firefox-dependencies": "handpick --target=firefoxDependencies",
     "install-chrome-dependencies": "handpick --target=chromeDependencies",
-    "execute:firefox": "IS_CLI=true SSO_LDAP_PASSWORD=$npm_config_ldap_pw ./run.sh firefox",
-    "execute:chrome": "IS_CLI=true SSO_LDAP_PASSWORD=$npm_config_ldap_pw ./run.sh chrome"
+    "firefox:install": "IS_CLI=true SSO_LDAP_PASSWORD=$npm_config_ldap_pw ./install.sh firefox",
+    "chrome:install": "IS_CLI=true SSO_LDAP_PASSWORD=$npm_config_ldap_pw ./install.sh chrome",
+    "firefox:install:test": "npm run install:firefox && ./run.sh firefox $npm_config_test",
+    "chrome:install:test": "npm run install:chrome && ./run.sh chrome $npm_config_test",
+    "firefox:test": "IS_CLI=true SSO_LDAP_PASSWORD=$npm_config_ldap_pw ./run.sh firefox $npm_config_test",
+    "chrome:test": "IS_CLI=true SSO_LDAP_PASSWORD=$npm_config_ldap_pw ./run.sh chrome $npm_config_test"
   },
   "repository": {
     "type": "git",
