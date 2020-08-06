@@ -1,8 +1,3 @@
-if [[ ! "$2" ]]; then
-  echo "No file specified"
-  exit 2
-fi
-
-node ./process-test.js $2
+node ./process-test.js
 
 SSO_LDAP_PASSWORD=$SSO_LDAP_PASSWORD node ./wrapper.js $1
