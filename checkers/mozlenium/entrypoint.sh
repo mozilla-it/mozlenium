@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# f=$(ls /checks/*.js | head -1)
+f=$(ls /checks/*.js | head -1)
 
 browser=${1:-firefox}
 if [[ ! "$f" ]]; then
