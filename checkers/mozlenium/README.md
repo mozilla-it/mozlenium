@@ -2,22 +2,28 @@
 
 ## Setup CLI
 
-To set up the cli, go find the desired selenium js script to test. A working example is in the `./test.js` file here. Paste the code you want
-into that file, then run the following command line.
+To set up the cli, go find the desired selenium js script to test. A working example is in the `examples/air-mozilla-check.js` file here. Create a new file for testing, then run the following command line.
 
 ## Run CLI
 
-This cli can be run with several options
-
-Run browser with single test with installation
+Install package:
 
 ```
-npm run [chrome|firefox]:install:test --ldap_pw=[ldap_pw]
+npm run mozlenium:install --browser [browser]
 ```
 
-Run the same browser single text with no installation
+Run browser with single test
 
 ```
-npm run [chrome|firefox]:run --ldap_pw=[ldap_pw]
-eg: npm run firefox:run --ldap_pw=123...456
+
+npm run mozlenium:execute --ldap_pw=[ldap_pw] --browser [firefox|chrome] --from_file=[testfile] --to_file=[filetogenerate]
 ```
+
+## Arguments
+
+| Argument  | Description                                                    | Default         |
+| --------- | -------------------------------------------------------------- | --------------- |
+| ldap_pw   | Password for ldap accounts                                     | none            |
+| browser   | firefox \| chrome                                              | firefox         |
+| from_file | file that mozlenium will transform to selenium runnable test   | /check/check.js |
+| to_file   | file that mozlenium will create and mozlenium will run against | /check.js       |
