@@ -13,14 +13,16 @@ const getExecuteScriptPromises = ($browser, scripts) =>
  */
 class MozleniumBrowser {
   constructor(browser) {
+    this.logger = new MozleniumLogger();
     // Add more browsers here as needed
     if (browser === 'chrome') {
+      this.logger.status('using chrome browser');
       this.$browser = require('./chrome-browser.js');
     } else {
+      this.logger.status('using firefox browser');
       this.$browser = require('./firefox-browser.js');
     }
     this.setup();
-    this.logger = new MozleniumLogger();
   }
 
   setup() {

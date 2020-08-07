@@ -5,7 +5,8 @@
 class MozleniumLogger {
   static ERROR_PREFIX = '[ERROR]: ';
   static TELEMETRY_PREFIX = 'TELEMETRY';
-  static LOG_PREFIX = '[INFO]: ';
+  static LOG_PREFIX = '[MESSAGE]: ';
+  static STATUS_PREFIX = '[STATUSMSG]: ';
   static SUCCESS_PREFIX = '[SUCCESS]: ';
   constructor() {
     this.logger = console;
@@ -25,6 +26,9 @@ class MozleniumLogger {
   }
   success(message) {
     this.logger.log(`${MozleniumLogger.SUCCESS_PREFIX}${message}`);
+  }
+  status(message) {
+    this.logger.log(`${MozleniumLogger.STATUS_PREFIX}${message}`);
   }
 }
 

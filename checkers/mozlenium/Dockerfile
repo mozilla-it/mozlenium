@@ -76,8 +76,18 @@ RUN wget https://chromedriver.storage.googleapis.com/2.41/chromedriver_linux64.z
     mv chromedriver /usr/bin/
 
 ENV NODE_PATH /app/node_modules
+ENV PATH=${PATH}:${NODE_PATH}/geckodriver/bin:/app/firefox
 
-COPY package.json mozlenium.js firefox-browser.js chrome-browser.js entrypoint.sh wrapper.js /app/
+COPY 	entrypoint.sh \
+ 			package.json \
+			mozlenium.js \
+			firefox-browser.js \
+			chrome-browser.js \
+			mozlenium-browser.js \
+			mozlenium-logger.js \
+			mozlenium-test-runner.js \
+			get-args.js \
+			/app/
 
 RUN npm install && \
     npm run install-chrome-dependencies && \
