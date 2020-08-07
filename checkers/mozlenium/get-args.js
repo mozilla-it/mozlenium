@@ -1,3 +1,7 @@
+/**
+ * Library that's meant to simply and quickly return command line arguments for mozlenium
+ * Format: -[key] value
+ */
 const MozleniumLogger = require('./mozlenium-logger');
 const logger = new MozleniumLogger();
 const KEY_PREFIX = '-';
@@ -14,7 +18,7 @@ const getArgs = (key) => {
       }
     }
   }
-  logger.error(`found no key: ${key}`);
+  logger.log(`found no key: ${key}`);
   return null;
 };
 module.exports = getArgs;

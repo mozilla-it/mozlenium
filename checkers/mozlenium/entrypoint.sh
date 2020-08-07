@@ -26,7 +26,7 @@ etime=$(date +%s%3N)
 
 ((runtime=etime-stime))
 
-echo "Check finished in ${runtime:-0} ms with status code $res"
+echo "[STATUSMSG]: Check finished in ${runtime:-0} ms with status code $res"
 echo "[TELEMETRY|node_time]: ${runtime:-0}"
 
 exit $res
