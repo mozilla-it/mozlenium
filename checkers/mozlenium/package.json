@@ -1,6 +1,6 @@
 {
   "name": "mozlenium",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "",
   "main": "wrapper.js",
   "dependencies": {
@@ -21,12 +21,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "install-firefox-dependencies": "handpick --target=firefoxDependencies",
     "install-chrome-dependencies": "handpick --target=chromeDependencies",
-    "firefox:install": "./install.sh firefox",
-    "chrome:install": "./install.sh chrome",
-    "firefox:run": "IS_CLI=true SSO_LDAP_PASSWORD=$npm_config_ldap_pw ./run.sh firefox $npm_config_test",
-    "chrome:run": "IS_CLI=true SSO_LDAP_PASSWORD=$npm_config_ldap_pw ./run.sh chrome $npm_config_test",
-    "firefox:install:test": "npm run firefox:install && npm run firefox:run",
-    "chrome:install:test": "npm run chrome:install && npm run chrome:run"
+    "mozlenium:install": "./install.sh $npm_config_browser",
+    "mozlenium:execute": "IS_CLI=true SSO_LDAP_PASSWORD=$npm_config_ldap_pw node ./mozlenium.js -browser $npm_config_browser -from $npm_config_from_file -to $npm_config_to_file"
   },
   "repository": {
     "type": "git",
