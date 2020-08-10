@@ -22,6 +22,8 @@ class CheckConfig:
         self._max_attempts = int(kwargs.get("max_attempts", "3"))
         self._check_url = kwargs.get("check_url", None)
         self._timeout = float(kwargs.get("timeout", 0))
+        
+        self.labels = kwargs.get("labels",{})
 
         self.pod_spec = kwargs.get("pod_spec", {})
 
@@ -79,6 +81,14 @@ class CheckConfig:
     def pod_spec(self, pod_spec):
         self._pod_spec = pod_spec
 
+    @property
+    def labels(self):
+        return self._labels
+
+    @labels.setter
+    def labels(self,labels):
+        self._labels = labels
+
     def __iter__(self):
         return iter(
             [
@@ -126,6 +136,8 @@ class CheckConfig:
             "restart_policy": "Never",
             "containers": [{"name": self.name, "image": image}],
         }
+        if self.labels:
+            template["metadata"] = { "labels": self.labels }
         if secret_ref:
             template["containers"][0]["envFrom"] = [{"secretRef": {"name": secret_ref}}]
         if check_cm:
