@@ -30,6 +30,9 @@ class Escalation(BaseEscalation):
             gcp_workload_url = f"https://console.cloud.google.com/kubernetes/job/{gcp_region}/{gcp_project}/{gcp_cluster}/{self.config.name}/details?project={gcp_project}"
             more_details += [f"<{gcp_workload_url}|GCP>"]
 
+        if self.config.check_url:
+            more_details += [f"<{self.config.check_url}|view failed url>"]
+
         color = "#ff0000"  # red
         if self.status.status.name == "OK":
             color = "#36a64f"  # green
