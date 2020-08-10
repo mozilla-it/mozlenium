@@ -1,5 +1,6 @@
 const $driver = require('selenium-webdriver');
 const MozleniumLogger = require('./mozlenium-logger');
+const fs = require('fs');
 
 const getExecuteScriptPromises = ($browser, scripts) =>
   scripts.reduce((acc, single) => {
@@ -12,6 +13,8 @@ const getExecuteScriptPromises = ($browser, scripts) =>
  * This class's job is to contain all the functionality of handling the browser be it firefox/chrome/etc
  */
 class MozleniumBrowser {
+  static SCREENSHOT_FILE = './screenshot.png';
+  static SCREENSHOT_ERROR_FILE = './screenshot-error.png';
   constructor(browser) {
     this.logger = new MozleniumLogger();
     // Add more browsers here as needed
@@ -23,6 +26,26 @@ class MozleniumBrowser {
       this.$browser = require('./firefox-browser.js');
     }
     this.setup();
+  }
+
+  async screenShot(errorScreenshot = false) {
+    return new Promise((res, rej) => {
+      this.$browser.takeScreenshot().then((data) => {
+        fs.writeFile(
+          errorScreenshot
+            ? MozleniumBrowser.SCREENSHOT_ERROR_FILE
+            : MozleniumBrowser.SCREENSHOT_FILE,
+          data,
+          'base64',
+          (err) => {
+            if (err) {
+              this.logger.error('screenshot failure: ', err);
+            }
+            res();
+          },
+        );
+      });
+    });
   }
 
   setup() {
@@ -44,8 +67,13 @@ class MozleniumBrowser {
           this.logger.logTelemetry('get_time', domComplete - navigationStart);
           this.logger.logTelemetry('latency', responseStart - navigationStart);
         })
+        .then(() => this.screenShot())
+        .then(() => {
+          this.logger.success('screenshot was successful');
+        })
         .catch((error) => {
           this.logger.error(`GET error for url: ${url}`, error);
+          this.screenShot(true);
           throw new Error(error);
         });
 
@@ -103,7 +131,7 @@ class MozleniumBrowser {
       if (!$secure) {
         throw new Error(`Invalid env $secure: ${$secure}`);
       }
-      const result = await runner(this.$browser, $driver, $secure);
+      await runner(this.$browser, $driver, $secure);
       const etime = Date.now();
       this.logger.logTelemetry('total_time', etime - stime);
       return true;
