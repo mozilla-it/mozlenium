@@ -5,7 +5,7 @@ const MozleniumLogger = require('./mozlenium-logger');
  * that will be useful for selenium.
  */
 class MozleniumTestRunner {
-  static TEST_FILE = '../../examples/demo-check.js';
+  static TEST_FILE = '/checks/check.js';
   static RUNNER_FILE = './check.js';
   constructor({ from, to }) {
     if (!from) {
@@ -32,8 +32,8 @@ class MozleniumTestRunner {
   }
   transformTestScript(scriptData) {
     const transformedScript = scriptData.replace(
-      /([\^\n\r])\$browser\./,
-      '$1return $browser.',
+      /([\^\n\r])\$browser(\.?)/,
+      '$1return $browser$2',
     );
     return `async function runner($browser, $driver, $secure) { \n ${transformedScript} }\n\nmodule.exports = runner;`;
   }
