@@ -16,6 +16,8 @@ export NODE_PATH=/app/node_modules
 
 export PATH=${PATH}:${NODE_PATH}/geckodriver/bin:/app/firefox
 
+export CHECKS_BASEDIR=/checks/
+
 #geckodriver -V
 #firefox --version
 

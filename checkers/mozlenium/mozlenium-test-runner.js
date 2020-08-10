@@ -5,11 +5,11 @@ const MozleniumLogger = require('./mozlenium-logger');
  * that will be useful for selenium.
  */
 class MozleniumTestRunner {
-  static TEST_FILE = '/checks/check.js';
+  static TEST_DIR = process.env.CHECKS_BASEDIR;
   static RUNNER_FILE = './check.js';
   constructor({ from, to }) {
     if (!from) {
-      from = MozleniumTestRunner.TEST_FILE;
+      from = '';
     }
     if (!to) {
       to = MozleniumTestRunner.RUNNER_FILE;
@@ -18,16 +18,51 @@ class MozleniumTestRunner {
     this.runnerFile = to;
     this.logger = new MozleniumLogger();
   }
-  async getTestScript() {
+
+  /**
+   * Method: getFile
+   * If a file is directly passed in to the library, use the file
+   * Otherwise, go to the default directory and use the first file available
+   */
+  getFile() {
     return new Promise((res, rej) => {
-      fs.readFile(this.testFile, (error, content) => {
-        if (error) {
-          this.logger.error(error);
-          rej(error);
+      if (this.testFile !== '') {
+        this.logger.status(`using cli check file: ${this.testFile}`);
+        res(this.testFile);
+        return;
+      }
+      fs.readdir(MozleniumTestRunner.TEST_DIR, (err, files) => {
+        if (!files.length) {
+          this.logger.error(
+            `Found no files in directory: ${MozleniumTestRunner.TEST_DIR}`,
+          );
+          rej();
           return;
         }
-        res(content.toString());
+        const returnFile = `${MozleniumTestRunner.TEST_DIR}${
+          files.reverse()[0]
+        }`;
+        this.logger.status(`using check file: ${returnFile}`);
+        res(returnFile);
       });
+    });
+  }
+  getTestScript() {
+    return new Promise((res, rej) => {
+      this.getFile()
+        .then((file) => {
+          fs.readFile(file, (error, content) => {
+            if (error) {
+              this.logger.error(error);
+              rej(error);
+              return;
+            }
+            res(content.toString());
+          });
+        })
+        .catch((error) => {
+          rej(error);
+        });
     });
   }
   transformTestScript(scriptData) {
