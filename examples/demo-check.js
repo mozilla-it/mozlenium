@@ -1,15 +1,18 @@
-//demo check
+// EXAMPLE copied script
 
-require('mozlenium')();
-
+//air.mozilla.org - anonymous page
 var assert = require('assert');
-var url = 'https://www.google.com'
-
-console.log("starting check");
-
-$browser.get(url);
-
-console.log($secure.SECRETSTUFF);
-
-console.log("well that went great");
-
+$browser.get('https://air.mozilla.org/').then(function () {
+  // Check the H1 title matches expected output
+  return $browser
+    .waitForAndFindElement($driver.By.css('h1'), 1000)
+    .then(function (element) {
+      return element.getText().then(function (text) {
+        assert.equal(
+          'Upcoming Section',
+          text,
+          'Page H1 title did not match "' + text + '"',
+        );
+      });
+    });
+});

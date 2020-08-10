@@ -5,7 +5,7 @@ const MozleniumLogger = require('./mozlenium-logger');
  * that will be useful for selenium.
  */
 class MozleniumTestRunner {
-  static TEST_FILE = '/checks/check.js';
+  static TEST_FILE = '../../examples/demo-check.js';
   static RUNNER_FILE = './check.js';
   constructor({ from, to }) {
     if (!from) {

@@ -2,7 +2,7 @@
 
 ## Setup CLI
 
-To set up the cli, go find the desired selenium js script to test. A working example is in the `examples/air-mozilla-check.js` file here. Create a new file for testing, then run the following command line.
+To set up the cli, go find the desired selenium js script to test. A working example is in the `/examples/demo-check.js` file here. Create a new file for testing, then run the following command line.
 
 ## Run CLI
 
@@ -21,9 +21,9 @@ npm run mozlenium:execute --ldap_pw=[ldap_pw] --browser [firefox|chrome] --from_
 
 ## Arguments
 
-| Argument  | Description                                                    | Default         |
-| --------- | -------------------------------------------------------------- | --------------- |
-| ldap_pw   | Password for ldap accounts                                     | none            |
-| browser   | firefox \| chrome                                              | firefox         |
-| from_file | file that mozlenium will transform to selenium runnable test   | /check/check.js |
-| to_file   | file that mozlenium will create and mozlenium will run against | /check.js       |
+| Argument  | Description                                                    | Default                      |
+| --------- | -------------------------------------------------------------- | ---------------------------- |
+| ldap_pw   | Password for ldap accounts                                     | none                         |
+| browser   | firefox \| chrome                                              | firefox                      |
+| from_file | file that mozlenium will transform to selenium runnable test   | ../../examples/demo-check.js |
+| to_file   | file that mozlenium will create and mozlenium will run against | /check.js                    |

@@ -1,8 +1,9 @@
-// EXAMPLE copied script
+async function runner($browser, $driver, $secure) { 
+ // EXAMPLE copied script
 
 //air.mozilla.org - anonymous page
 var assert = require('assert');
-$browser.get('https://air.mozilla.org/').then(function () {
+return $browser.get('https://air.mozilla.org/').then(function () {
   // Check the H1 title matches expected output
   return $browser
     .waitForAndFindElement($driver.By.css('h1'), 1000)
@@ -16,3 +17,6 @@ $browser.get('https://air.mozilla.org/').then(function () {
       });
     });
 });
+ }
+
+module.exports = runner;
