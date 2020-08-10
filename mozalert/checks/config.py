@@ -20,6 +20,7 @@ class CheckConfig:
         self._notification_interval = float(kwargs.get("notification_interval", 0))
         self._escalations = self.parse_escalations(kwargs.get("escalations", []))
         self._max_attempts = int(kwargs.get("max_attempts", "3"))
+        self._check_url = kwargs.get("check_url", None)
         self._timeout = float(kwargs.get("timeout", 0))
 
         self.pod_spec = kwargs.get("pod_spec", {})
@@ -45,6 +46,14 @@ class CheckConfig:
     @property
     def retry_interval(self):
         return self._retry_interval
+
+    @property
+    def check_url(self):
+        return self._check_url
+
+    @check_url.setter
+    def check_url(self, check_url):
+        self._check_url = check_url
 
     @property
     def notification_interval(self):
