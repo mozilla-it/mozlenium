@@ -41,6 +41,7 @@ class Status:
         self.next_check = kwargs.get("next_check", None)
         self.attempt = kwargs.get("attempt", 0)
         self.logs = kwargs.get("logs", "")
+        self.message = kwargs.get("message","")
         self.telemetry = kwargs.get("telemetry", {})
 
     @property
@@ -126,6 +127,14 @@ class Status:
     def logs(self, logs):
         self._logs = logs
 
+    @property
+    def message(self):
+        return self._message
+
+    @message.setter
+    def message(self, message):
+        self._message = message
+
     def __iter__(self):
         return iter(
             [
@@ -136,6 +145,7 @@ class Status:
                 ("attempt", self.attempt),
                 ("logs", self.logs),
                 ("telemetry", self.telemetry),
+                ("message", self.message),
             ]
         )
 
@@ -175,6 +185,7 @@ class Status:
                 "next_check": str(self.next_check).split(".")[0],
                 "logs": self.logs,
                 "telemetry": self.telemetry,
+                "message": self.message,
             }
         }
 
@@ -196,6 +207,7 @@ class Status:
         self.attempt = kwargs.get("attempt", self.attempt)
         self.logs = kwargs.get("logs", self.logs)
         self.telemetry = kwargs.get("telemetry", self.telemetry)
+        self.message = kwargs.get("message", self.message)
         if self.RUNNING and self.attempt:
             # pre_status was running with an attempt >0 so decrement the attempt
             # since we will retry anyhow
