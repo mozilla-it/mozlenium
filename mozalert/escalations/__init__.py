@@ -1,12 +1,12 @@
 class BaseEscalation:
-    def __init__(self, name, status, **kwargs):
+    def __init__(self, name, status, config, args):
         self.name = name
         self.status = status
-        self.attempt = kwargs.get("attempt", None)
-        self.max_attempts = kwargs.get("max_attempts", None)
-        self.last_check = kwargs.get("last_check", None)
-        self.logs = kwargs.get("logs", None)
-        self.args = kwargs.get("args", {})
+        self.config = config
+        self.args = args
+
+        assert self.status and self.config, "Must specify status and config"
 
     def run(self):
         pass
+

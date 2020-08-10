@@ -158,7 +158,6 @@ class BaseCheck:
             # not state OK and not enough failures to escalate
             self._next_interval = self.config.retry_interval
 
-        # TODO we need to check if we've got metrics mixed in
         if hasattr(self, "metrics_queue"):
             self.metrics_queue.put_many(
                 self.config.name,
@@ -189,12 +188,9 @@ class BaseCheck:
                 Escalation = getattr(module, "Escalation")
                 e = Escalation(
                     f"{self}",
-                    self.status.status.name,
-                    attempt=self.status.attempt,
-                    max_attempts=self.config.max_attempts,
-                    last_check=str(self.status.last_check),
-                    logs=self.status.logs,
                     args=args,
+                    config=self.config,
+                    status=self.status,
                 )
                 e.run()
             except Exception as e:
