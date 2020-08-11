@@ -9,4 +9,3 @@ class BaseEscalation:
 
     def run(self):
         pass
-

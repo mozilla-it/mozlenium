@@ -17,7 +17,8 @@ class Escalation(BaseEscalation):
             """
         if self.status.attempt and self.config.max_attempts:
             self.message += (
-                "\n" + f"<b>Attempt:</b> {self.status.attempt}/{self.config.max_attempts}<br>"
+                "\n"
+                + f"<b>Attempt:</b> {self.status.attempt}/{self.config.max_attempts}<br>"
             )
         elif self.status.attempt:
             self.message += "\n" + f"<b>Attempt:</b> {self.status.attempt}<br>"

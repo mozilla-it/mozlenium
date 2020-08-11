@@ -23,7 +23,9 @@ class Escalation(BaseEscalation):
         fields += [{"title": "Status", "value": self.status.status.name, "short": True}]
 
         if self.config.labels:
-            labels_flat = "\n".join([ f"{key}: {val}" for key,val in self.config.labels.items()])
+            labels_flat = "\n".join(
+                [f"{key}: {val}" for key, val in self.config.labels.items()]
+            )
             fields += [{"title": "Labels", "value": labels_flat, "short": False}]
 
         fields += [{"title": "Attempt", "value": self.status.attempt, "short": True}]
@@ -31,9 +33,14 @@ class Escalation(BaseEscalation):
         more_details += [self.status.message]
 
         if gcp_project:
-            _gcp_logs_args = { "project": gcp_project, "advancedFilter": f"logName=projects/{gcp_project}/logs/{self.config.name}" }
+            _gcp_logs_args = {
+                "project": gcp_project,
+                "advancedFilter": f"logName=projects/{gcp_project}/logs/{self.config.name}",
+            }
             gcp_logs_args = urlencode(_gcp_logs_args, quote_via=quote_plus)
-            gcp_logs_url = f"https://console.cloud.google.com/logs/viewer?{gcp_logs_args}"
+            gcp_logs_url = (
+                f"https://console.cloud.google.com/logs/viewer?{gcp_logs_args}"
+            )
             more_details += [f"<{gcp_logs_url}|view logs>"]
 
         if gcp_project and gcp_region and gcp_cluster:
@@ -46,22 +53,18 @@ class Escalation(BaseEscalation):
         color = "#ff0000"  # red
         if self.status.status.name == "OK":
             color = "#36a64f"  # green
-        
+
         more_details_flat = "\n".join(more_details)
 
-        fields += [{"title": "More Details", "value": more_details_flat, "short": False}]
+        fields += [
+            {"title": "More Details", "value": more_details_flat, "short": False}
+        ]
 
         self.slack_message = {
             "channel": self.channel,
             "username": "Mozalert",
             "icon_emoji": ":scream_cat:",
-            "attachments": [
-                {
-                    "mrkdwn_in": ["text"],
-                    "color": color,
-                    "fields": fields,
-                }
-            ],
+            "attachments": [{"mrkdwn_in": ["text"], "color": color, "fields": fields,}],
         }
 
         self.slack_message = json.dumps(self.slack_message)
