@@ -17,6 +17,16 @@ class Escalation(BaseEscalation):
         gcp_cluster = os.environ.get("GCP_CLUSTER", None)
         gcp_region = os.environ.get("GCP_REGION", None)
         more_details = []
+        fields = []
+
+        fields += [{"title": "Target", "value": name, "short": False}]
+        fields += [{"title": "Status", "value": self.status.status.name, "short": True}]
+
+        if self.config.labels:
+            labels_flat = "\n".join([ f"{key}: {val}" for key,val in self.config.labels.items()])
+            fields += [{"title": "Labels", "value": labels_flat, "short": False}]
+
+        fields += [{"title": "Attempt", "value": self.status.attempt, "short": True}]
 
         more_details += [self.status.message]
 
@@ -39,6 +49,8 @@ class Escalation(BaseEscalation):
         
         more_details_flat = "\n".join(more_details)
 
+        fields += [{"title": "More Details", "value": more_details_flat, "short": False}]
+
         self.slack_message = {
             "channel": self.channel,
             "username": "Mozalert",
@@ -47,12 +59,7 @@ class Escalation(BaseEscalation):
                 {
                     "mrkdwn_in": ["text"],
                     "color": color,
-                    "fields": [
-                        {"title": "Target", "value": name, "short": False},
-                        {"title": "Status", "value": self.status.status.name, "short": True},
-                        {"title": "Attempt", "value": self.status.attempt, "short": True},
-                        {"title": "More Details", "value": f"{more_details_flat}", "short": False},
-                    ],
+                    "fields": fields,
                 }
             ],
         }

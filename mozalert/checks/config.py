@@ -136,8 +136,6 @@ class CheckConfig:
             "restart_policy": "Never",
             "containers": [{"name": self.name, "image": image}],
         }
-        if self.labels:
-            template["metadata"] = { "labels": self.labels }
         if secret_ref:
             template["containers"][0]["envFrom"] = [{"secretRef": {"name": secret_ref}}]
         if check_cm:
