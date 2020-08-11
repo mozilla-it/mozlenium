@@ -41,7 +41,7 @@ class Status:
         self.next_check = kwargs.get("next_check", None)
         self.attempt = kwargs.get("attempt", 0)
         self.logs = kwargs.get("logs", "")
-        self.message = kwargs.get("message","")
+        self.message = kwargs.get("message", "")
         self.telemetry = kwargs.get("telemetry", {})
 
     @property

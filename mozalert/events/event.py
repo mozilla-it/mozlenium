@@ -56,8 +56,8 @@ class Event:
             max_attempts=self._check_spec.get("max_attempts", 3),
             timeout=self.parse_time(self._check_spec.get("timeout", "5m")).seconds,
             pod_spec=self._check_spec.get("template", {}).get("spec", {}),
-            check_url=self._check_spec.get("check_url",None),
-            labels=self._metadata.get("labels",{}),
+            check_url=self._check_spec.get("check_url", None),
+            labels=self._metadata.get("labels", {}),
         )
 
         if not self.config.pod_spec:
