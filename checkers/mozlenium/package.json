@@ -4,6 +4,7 @@
   "description": "",
   "main": "wrapper.js",
   "dependencies": {
+    "@google-cloud/storage": "^5.2.0",
     "assert": "^2.0.0",
     "handpick": "^2.1.0",
     "lodash": "^4.17.18",
@@ -22,7 +23,7 @@
     "install-firefox-dependencies": "handpick --target=firefoxDependencies",
     "install-chrome-dependencies": "handpick --target=chromeDependencies",
     "mozlenium:install": "./install.sh $npm_config_browser",
-    "mozlenium:execute": "CHECKS_BASEDIR=./checks/ IS_CLI=true SSO_LDAP_PASSWORD=$npm_config_ldap_pw node ./mozlenium.js -browser $npm_config_browser -from $npm_config_from_file -to $npm_config_to_file"
+    "mozlenium:execute": "GCS_BUCKET=mozlenium-dev-snapshots CHECKS_BASEDIR=./checks/ IS_CLI=true SSO_LDAP_PASSWORD=$npm_config_ldap_pw node ./mozlenium.js -browser $npm_config_browser -from $npm_config_from_file -to $npm_config_to_file"
   },
   "repository": {
     "type": "git",

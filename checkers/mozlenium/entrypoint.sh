@@ -17,6 +17,7 @@ export NODE_PATH=/app/node_modules
 export PATH=${PATH}:${NODE_PATH}/geckodriver/bin:/app/firefox
 
 export CHECKS_BASEDIR=/checks/
+export GCS_BUCKET=mozlenium-dev-snapshots
 
 #geckodriver -V
 #firefox --version

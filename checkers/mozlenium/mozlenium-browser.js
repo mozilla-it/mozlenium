@@ -1,3 +1,4 @@
+const { Storage } = require('@google-cloud/storage');
 const $driver = require('selenium-webdriver');
 const MozleniumLogger = require('./mozlenium-logger');
 const fs = require('fs');
@@ -13,10 +14,11 @@ const getExecuteScriptPromises = ($browser, scripts) =>
  * This class's job is to contain all the functionality of handling the browser be it firefox/chrome/etc
  */
 class MozleniumBrowser {
-  static SCREENSHOT_FILE = './screenshot.png';
-  static SCREENSHOT_ERROR_FILE = './screenshot-error.png';
+  static SCREENSHOT_FILE = 'screenshot.png';
+  static SCREENSHOT_ERROR_FILE = 'screenshot-error.png';
   constructor(browser) {
     this.logger = new MozleniumLogger();
+    this.storage = new Storage();
     // Add more browsers here as needed
     if (browser === 'chrome') {
       this.logger.status('using chrome browser');
@@ -27,23 +29,45 @@ class MozleniumBrowser {
     }
     this.setup();
   }
-
-  async screenShot(errorScreenshot = false) {
+  async uploadScreenshot(filename) {
+    const startTime = Date.now();
+    const result = await this.storage
+      .bucket(process.env.GCS_BUCKET)
+      .upload(filename, {
+        // Support for HTTP requests made with `Accept-Encoding: gzip`
+        gzip: true,
+        // By setting the option `destination`, you can change the name of the
+        // object you are uploading to a bucket.
+        metadata: {
+          // Enable long-lived HTTP caching headers
+          // Use only if the contents of the file will never change
+          // (If the contents will change, use cacheControl: 'no-cache')
+          cacheControl: 'public, max-age=31536000',
+        },
+      });
+    const endTime = Date.now();
+    this.logger.logTelemetry('gcs_bucket_upload', endTime - startTime);
+    this.logger.success('uploaded screenshot');
+    this.logger.logImage(filename.replace(/^\.\//, ''));
+    return result;
+  }
+  screenShot(errorScreenshot = false) {
+    const savedFile = `./${Date.now()}-${
+      errorScreenshot
+        ? MozleniumBrowser.SCREENSHOT_ERROR_FILE
+        : MozleniumBrowser.SCREENSHOT_FILE
+    }`;
+    const startTime = Date.now();
     return new Promise((res, rej) => {
       this.$browser.takeScreenshot().then((data) => {
-        fs.writeFile(
-          errorScreenshot
-            ? MozleniumBrowser.SCREENSHOT_ERROR_FILE
-            : MozleniumBrowser.SCREENSHOT_FILE,
-          data,
-          'base64',
-          (err) => {
-            if (err) {
-              this.logger.error('screenshot failure: ', err);
-            }
-            res();
-          },
-        );
+        fs.writeFile(savedFile, data, 'base64', (err) => {
+          if (err) {
+            this.logger.error('screenshot failure: ', err);
+          }
+          const endTime = Date.now();
+          this.logger.logTelemetry('selenium_screenshot', endTime - startTime);
+          res(savedFile);
+        });
       });
     });
   }
@@ -68,8 +92,12 @@ class MozleniumBrowser {
           this.logger.logTelemetry('latency', responseStart - navigationStart);
         })
         .then(() => this.screenShot())
-        .then(() => {
-          this.logger.success('screenshot was successful');
+        .then((filename) => {
+          this.logger.success('screenshot capture was successful');
+          return this.uploadScreenshot(filename);
+        })
+        .then((result) => {
+          this.logger.success('cloud storage upload was successful');
         })
         .catch((error) => {
           this.logger.error(`GET error for url: ${url}`, error);

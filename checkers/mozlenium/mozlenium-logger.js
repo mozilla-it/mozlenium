@@ -4,6 +4,7 @@
  */
 class MozleniumLogger {
   static ERROR_PREFIX = '[ERROR]: ';
+  static IMAGE_PREFIX = '[STATUSIMG]: ';
   static TELEMETRY_PREFIX = 'TELEMETRY';
   static LOG_PREFIX = '[MESSAGE]: ';
   static STATUS_PREFIX = '[STATUSMSG]: ';
@@ -29,6 +30,9 @@ class MozleniumLogger {
   }
   status(message) {
     this.logger.log(`${MozleniumLogger.STATUS_PREFIX}${message}`);
+  }
+  logImage(filename) {
+    this.logger.log(`${MozleniumLogger.IMAGE_PREFIX}${filename}`);
   }
 }
 
