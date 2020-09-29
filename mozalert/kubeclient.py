@@ -65,7 +65,8 @@ class KubeClient:
         """
         pod_spec = client.V1PodSpec(**kwargs)
         template = client.V1PodTemplateSpec(
-            metadata=client.V1ObjectMeta(labels={"app": name}), spec=pod_spec,
+            metadata=client.V1ObjectMeta(labels={"app": name}),
+            spec=pod_spec,
         )
         job_spec = client.V1JobSpec(template=template, backoff_limit=0)
         job = client.V1Job(

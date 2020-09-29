@@ -1,4 +1,5 @@
 import os
+from collections import namedtuple
 
 
 class CheckConfig:
@@ -21,6 +22,7 @@ class CheckConfig:
         self._escalations = self.parse_escalations(kwargs.get("escalations", []))
         self._max_attempts = int(kwargs.get("max_attempts", "3"))
         self._check_url = kwargs.get("check_url", None)
+        self.references = self.parse_to_object(kwargs.get("references", {}))
         self._timeout = float(kwargs.get("timeout", 0))
 
         self.labels = kwargs.get("labels", {})
@@ -56,6 +58,14 @@ class CheckConfig:
     @check_url.setter
     def check_url(self, check_url):
         self._check_url = check_url
+
+    @property
+    def references(self):
+        return self._references
+
+    @references.setter
+    def references(self, references):
+        self._references = references
 
     @property
     def notification_interval(self):
@@ -122,6 +132,16 @@ class CheckConfig:
                 del e["env_args"]
             _escalations += [e]
         return _escalations
+
+    @staticmethod
+    def parse_to_object(tmp_dict):
+        """
+        Tested with a single depth dict, converts a dict to an object.
+        Given a = {'test': 'testval'}, a.test == 'testval' after being passed to this function.
+        """
+        tmp_dict = tmp_dict or {}
+        objNamedTuple = namedtuple("objNamedTuple", sorted(tmp_dict))
+        return objNamedTuple(**tmp_dict)
 
     def build_pod_spec(self, **kwargs):
         """

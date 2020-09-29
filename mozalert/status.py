@@ -30,8 +30,8 @@ class EnumState(Enum):
 
 class Status:
     """
-    the status object is our python representation of the 
-    status subresource in our check crd object. 
+    the status object is our python representation of the
+    status subresource in our check crd object.
     """
 
     def __init__(self, **kwargs):

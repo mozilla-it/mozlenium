@@ -187,7 +187,10 @@ class BaseCheck:
                 )
                 Escalation = getattr(module, "Escalation")
                 e = Escalation(
-                    f"{self}", args=args, config=self.config, status=self.status,
+                    f"{self}",
+                    args=args,
+                    config=self.config,
+                    status=self.status,
                 )
                 e.run()
             except Exception as e:
