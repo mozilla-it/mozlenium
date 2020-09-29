@@ -33,19 +33,23 @@ class Escalation(BaseEscalation):
         more_details += [self.status.message]
 
         if gcp_project:
+            filter_list = [f"resource.labels.container_name={self.config.name}"]
+
+            if gcp_region and gcp_cluster:
+                filter_list.append(f"resource.labels.cluster_name={gcp_cluster}")
+                filter_list.append(f"resource.labels.location={gcp_region}")
+
+            advanced_filter = " ".join(filter_list)
             _gcp_logs_args = {
                 "project": gcp_project,
-                "advancedFilter": f"logName=projects/{gcp_project}/logs/{self.config.name}",
+                "advancedFilter": advanced_filter,
             }
+
             gcp_logs_args = urlencode(_gcp_logs_args, quote_via=quote_plus)
             gcp_logs_url = (
                 f"https://console.cloud.google.com/logs/viewer?{gcp_logs_args}"
             )
             more_details += [f"<{gcp_logs_url}|view logs>"]
-
-        if gcp_project and gcp_region and gcp_cluster:
-            gcp_workload_url = f"https://console.cloud.google.com/kubernetes/job/{gcp_region}/{gcp_project}/{gcp_cluster}/{self.config.name}/details?project={gcp_project}"
-            more_details += [f"<{gcp_workload_url}|GCP>"]
 
         if self.config.check_url:
             more_details += [f"<{self.config.check_url}|view failed url>"]
@@ -64,7 +68,13 @@ class Escalation(BaseEscalation):
             "channel": self.channel,
             "username": "Mozalert",
             "icon_emoji": ":scream_cat:",
-            "attachments": [{"mrkdwn_in": ["text"], "color": color, "fields": fields,}],
+            "attachments": [
+                {
+                    "mrkdwn_in": ["text"],
+                    "color": color,
+                    "fields": fields,
+                }
+            ],
         }
 
         self.slack_message = json.dumps(self.slack_message)
