@@ -7,10 +7,10 @@ class CheckHandler(threading.Thread):
     """
     the CheckHandler thread takes check events from the controller and process them as
     they come in. Each event has an associated operation:
-        
+
     ADDED: a new check has been created. the main thread creates a new check object which
            creates a threading.Timer set to the check_interval.
-        
+
     DELETED: a check has been removed. Cancel/resolve any running threads and delete the
              check object.
 

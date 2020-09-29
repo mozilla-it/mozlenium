@@ -12,11 +12,20 @@ class TestEscalations(unittest.TestCase):
         self.statusMock = MagicMock(message="failed-test-message", attempt=3)
         # name is a special object im magicmock land, and so has to be set seperately
         self.statusMock.status.name = "OK"
+
         self.configMock = MagicMock(check_url="fake_url")
         self.configMock.name = "mock_config_name"
+
+        self.configSourceMock = MagicMock(
+            check_url="fake_url",
+        )
+        self.configSourceMock.name = "mock_source_config_name"
+        self.configSourceMock.references = MagicMock(source_code="fake_source_url")
+
         self.argsMock = MagicMock()
         args_dict = {"channel": "test_channel", "webhook_url": "test_webhook"}
         self.argsMock.get = MagicMock(side_effect=(lambda x: args_dict[x]))
+
         with patch.dict("os.environ", {"GCP_PROJECT": "TEST_PROJECT"}):
             self.gcp_project_escalation = Escalation(
                 "test-escalation", self.statusMock, self.configMock, self.argsMock
@@ -32,6 +41,13 @@ class TestEscalations(unittest.TestCase):
             self.gcp_project_long_escalation = Escalation(
                 "test-escalation", self.statusMock, self.configMock, self.argsMock
             )
+
+        self.check_source_escalation = Escalation(
+            "check-source-escalation",
+            self.statusMock,
+            self.configSourceMock,
+            self.argsMock,
+        )
 
     def test_slack_escalation_link(self):
         slack_message_obj = json.loads(self.gcp_project_escalation.slack_message)
@@ -54,3 +70,14 @@ class TestEscalations(unittest.TestCase):
         )[0]["value"]
         url = "https://console.cloud.google.com/logs/viewer?project=TEST_PROJECT&advancedFilter=resource.labels.container_name%3Dmock_config_name+resource.labels.cluster_name%3DTEST_CLUSTER+resource.labels.location%3DTEST_REGION"
         self.assertIn(url, more_details)
+
+    def test_check_reference(self):
+        slack_message_obj = json.loads(self.check_source_escalation.slack_message)
+        more_details = list(
+            filter(
+                lambda fields: fields["title"] == "More Details",
+                slack_message_obj["attachments"][0]["fields"],
+            )
+        )[0]["value"]
+        source_string = "\n<fake_source_url|view source>"
+        self.assertIn(source_string, more_details)

@@ -57,6 +57,7 @@ class Event:
             timeout=self.parse_time(self._check_spec.get("timeout", "5m")).seconds,
             pod_spec=self._check_spec.get("template", {}).get("spec", {}),
             check_url=self._check_spec.get("check_url", None),
+            references=self._check_spec.get("references", {}),
             labels=self._metadata.get("labels", {}),
         )
 

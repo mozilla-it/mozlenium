@@ -54,6 +54,12 @@ class Escalation(BaseEscalation):
         if self.config.check_url:
             more_details += [f"<{self.config.check_url}|view failed url>"]
 
+        # we're hard coding just one type of reference
+        # once we have an example of another reference type, it'd probably be good to generalize
+        if self.config.references:
+            if self.config.references.source_code:
+                more_details += [f"<{self.config.references.source_code}|view source>"]
+
         color = "#ff0000"  # red
         if self.status.status.name == "OK":
             color = "#36a64f"  # green

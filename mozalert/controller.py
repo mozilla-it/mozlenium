@@ -84,7 +84,9 @@ class Controller(threading.Thread):
             self.threads[name].thread.join()
 
         self.new_thread(
-            name, self.threads[name].obj, **self.threads[name].kwargs,
+            name,
+            self.threads[name].obj,
+            **self.threads[name].kwargs,
         )
 
     def run(self):

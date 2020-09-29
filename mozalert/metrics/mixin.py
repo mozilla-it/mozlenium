@@ -35,7 +35,7 @@ class MetricsMixin:
     @staticmethod
     def extract_telemetry_from_logs(logs):
         """
-        we support some basic telemetry in log responses from checks. 
+        we support some basic telemetry in log responses from checks.
         this allows one to pass telemetry back to the controller
         without needing to implement additional clients.
         """

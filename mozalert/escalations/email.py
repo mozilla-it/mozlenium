@@ -28,6 +28,16 @@ class Escalation(BaseEscalation):
             self.message += (
                 "\n" + f"<b>More Details:</b><br> <pre>{self.status.logs}</pre><br>"
             )
+
+        # When we find another thing to reference, we should generalize this line.  As is we are only
+        # going to pass the source code reference to email.
+        if self.config.references:
+            if self.config.references.source_code:
+                self.message += (
+                    "\n"
+                    + f"<b>Source Code for Check:</b><br> <pre>{self.config.references.source_code}</pre><br>"
+                )
+
         self.message += "\n" + "</p>"
         self.subject = f"Mozalert {self.status.status.name}: {self.name}"
 

@@ -33,15 +33,13 @@ class Check(base.BaseCheck, metrics.mixin.MetricsMixin):
         """
         Build the k8s resources, apply them, then poll for completion, and
         report status back to the thread.
-        
+
         The k8s resources take the form:
             pod spec -> pod template -> job spec -> job
 
         """
         logging.debug(f"Running job")
-
         job = self.kube.make_job(self.config.name, **self.config.pod_spec)
-
         try:
             res = self.kube.BatchV1Api.create_namespaced_job(
                 body=job, namespace=self.config.namespace
