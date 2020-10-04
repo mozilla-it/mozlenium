@@ -42,7 +42,7 @@ class MetricsMixin:
         _logs = ""
         _telemetry = {}
         for line in logs.split("\n"):
-            pattern = re.compile(r"TELEMETRY:\s*(?P<key>\w+)\s*(?P<val>\d+)[^0-9]?")
+            pattern = re.compile(r"\[TELEMETRY\|(?P<key>\w+)\]:\s*(?P<val>\d+)[^0-9]?")
             match = pattern.match(line)
             if not match:
                 _logs += line + "\n"
